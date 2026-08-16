@@ -75,6 +75,53 @@ import { kvGet, kvSet, kvRemove, registerKvMigration } from "./kv-db";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import { getInternalCapability, getInternalCapabilitySubToolDefinitions } from "./internal-capability-storage";
 import { isMediaStoreRef, loadMediaBlob } from "./media-cache-storage";
+
+const CHAT_FILE_PROMPT_MAX_CHARS = 120_000;
+
+async function attachUserTextFilesToHistory(history: ChatMessage[]): Promise<ChatMessage[]> {
+    let lastFileMsgId: string | null = null;
+    for (let i = history.length - 1; i >= 0; i--) {
+        const m = history[i];
+        if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file") {
+            lastFileMsgId = m.id;
+            break;
+        }
+    }
+
+    return Promise.all(history.map(async (message) => {
+        if (message.role !== "user" || message.mediaType !== "media_file" || message.mediaData?.fileType !== "file" || !message.mediaUrl) {
+            return message;
+        }
+        if (!isMediaStoreRef(message.mediaUrl)) return message;
+
+        const isLast = message.id === lastFileMsgId;
+        const fileName = message.mediaData?.fileName || message.content || "未命名文件";
+
+        if (!isLast) {
+            const summary = message.mediaData?.fileSummary || "暂无，可使用「读取聊天文件」工具查看完整内容";
+            return {
+                ...message,
+                content: `[历史文件(ID: ${message.id}): ${fileName}] 摘要：${summary}`,
+            };
+        }
+
+        try {
+            const stored = await loadMediaBlob(message.mediaUrl);
+            if (!stored) return { ...message, content: `[文件:${fileName}]（文件内容不可用）` };
+            const rawText = await stored.blob.text();
+            const text = rawText.slice(0, CHAT_FILE_PROMPT_MAX_CHARS);
+            const suffix = rawText.length > text.length ? "\n[文件内容过长，后续已截断]" : "";
+            const instruction = "\n\n（系统：你收到了一份新文件。请在本次回复末尾使用 [文件摘要: 你的简短总结] 的格式给它写一句备忘摘要，这句摘要不会显示给用户，但会永久挂载在历史记录中供你日后参考。）";
+            return {
+                ...message,
+                content: `[文件:${fileName}]\n${text}${suffix}${instruction}`,
+            };
+        } catch {
+            return { ...message, content: `[文件:${fileName}]（文件读取失败）` };
+        }
+    }));
+}
+
 import {
     DEFAULT_CHAT_BILINGUAL_PROMPT,
     DEFAULT_GROUP_CHAT_BILINGUAL_PROMPT,
@@ -1767,6 +1814,7 @@ export async function buildChatPromptMessages(
     userIdentity: ReturnType<typeof resolveUserIdentity>;
     toolsEnabled: boolean;
 }> {
+    const historyWithTextFiles = await attachUserTextFilesToHistory(history);
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
     if (!character) throw new ChatEngineError(`Character not found: ${session.contactId}`);
@@ -1807,7 +1855,7 @@ export async function buildChatPromptMessages(
     const attachedImages = config.enableImageRecognition === true ? options?.attachedImages : undefined;
     const historyForPrompt: ChatMessage[] = attachedImages?.length
         ? [
-            ...history,
+            ...historyWithTextFiles,
             ...attachedImages.map((imageUrl, index): ChatMessage => ({
                 id: `video-frame-${Date.now()}-${index}`,
                 sessionId: session.id,
@@ -1820,7 +1868,7 @@ export async function buildChatPromptMessages(
                 mediaData: { label: "视频通话当前画面" },
             })),
         ]
-        : history;
+        : historyWithTextFiles;
 
     const now = new Date();
     const promptTimeContext = buildCharacterTimeContext(character.timeZone, now);

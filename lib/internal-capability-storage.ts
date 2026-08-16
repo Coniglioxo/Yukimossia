@@ -14,6 +14,7 @@ export const AGENT_COMPUTER_CAPABILITY_ID = "agent_computer";
 export const LOCAL_DATA_LIBRARY_CAPABILITY_ID = "local_data_library";
 export const TOOLBOX_MANAGEMENT_CAPABILITY_ID = "toolbox_management";
 export const TIMED_WAKE_CAPABILITY_ID = "timed_wake";
+export const READ_HISTORY_FILE_CAPABILITY_ID = "read_history_file";
 
 export type InternalToolDefinition = {
     name: string;
@@ -94,6 +95,17 @@ const TIMED_WAKE_PARAMETER_SCHEMA = JSON.stringify({
         },
     },
     required: ["delayMinutes", "intent"],
+});
+
+const READ_HISTORY_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        messageId: {
+            type: "string",
+            description: "要读取的历史文件对应的消息 ID（如 msg_123456）",
+        },
+    },
+    required: ["messageId"],
 });
 
 const TIMED_WAKE_USAGE_GUIDE = [
@@ -1250,6 +1262,15 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
         updatedAt: 0,
     },
     {
+        id: READ_HISTORY_FILE_CAPABILITY_ID,
+        name: "读取聊天文件",
+        description: "根据消息 ID 读取历史聊天记录中用户发送的具体文件内容。",
+        enabled: true,
+        mode: "auto",
+        createdAt: 0,
+        updatedAt: 0,
+    },
+    {
         id: TIMED_WAKE_CAPABILITY_ID,
         name: "稍后主动联系",
         description: "让角色约定「过一会儿主动联系对方」：现在设定一个延时与想法，到点后由角色决定主动发消息或静默（不是睡觉醒来）。",
@@ -1353,6 +1374,13 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
             description: capability.description,
             parameterSchema: "{}",
             usageGuide: TOOLBOX_MANAGEMENT_USAGE_GUIDE,
+        };
+    }
+    if (capability.id === READ_HISTORY_FILE_CAPABILITY_ID) {
+        return {
+            name: capability.name,
+            description: capability.description,
+            parameterSchema: READ_HISTORY_FILE_PARAMETER_SCHEMA,
         };
     }
     if (capability.id === TIMED_WAKE_CAPABILITY_ID) {

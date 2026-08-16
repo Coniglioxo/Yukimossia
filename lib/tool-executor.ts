@@ -778,6 +778,7 @@ async function executeInternalTool(call: ToolCall, context?: ToolExecutionContex
     if (isToolboxManagementToolName(call.name)) return executeToolboxManagementTool(call);
     if (call.name === "发送文件") return executeSendFileTool(call);
     if (call.name === "角色电脑") return executeAgentComputerTool(call, context);
+    if (call.name === "读取聊天文件") return executeReadHistoryFileTool(call, context);
     if (call.name === "稍后主动联系" || call.name === "设置定时醒来") return executeTimedWakeTool(call, context);
 
     if (call.name !== "写入记忆") return null;
@@ -2062,6 +2063,43 @@ async function executeAgentComputerTool(call: ToolCall, context?: ToolExecutionC
 }
 
 // ── Send File Tool ───────────────────────────────
+
+async function executeReadHistoryFileTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
+    const args = call.args || {};
+    const messageId = typeof args.messageId === "string" ? args.messageId.trim() : "";
+    if (!messageId) return { name: call.name, success: false, error: "缺少 messageId 参数", continueConversation: false };
+    
+    if (!context?.sessionId) return { name: call.name, success: false, error: "无法获取当前会话 ID", continueConversation: false };
+    
+    const { loadChatMessages } = await import("./chat-storage");
+    const msgs = loadChatMessages(context.sessionId);
+    const msg = msgs.find(m => m.id === messageId);
+    if (!msg) return { name: call.name, success: false, error: "未找到该 ID 的消息", continueConversation: false };
+    if (msg.mediaType !== "media_file" || msg.mediaData?.fileType !== "file" || !msg.mediaUrl) {
+        return { name: call.name, success: false, error: "该消息不是文本文件", continueConversation: false };
+    }
+    
+    try {
+        const stored = await loadMediaBlob(msg.mediaUrl);
+        if (!stored) return { name: call.name, success: false, error: "文件内容已过期或不可用", continueConversation: false };
+        const rawText = await stored.blob.text();
+        return {
+            name: call.name,
+            success: true,
+            data: `文件 ${msg.mediaData?.fileName || ""} 的完整内容：\n${rawText}`,
+            continueConversation: true,
+            persistToHistory: false,
+            userNotice: "读取了历史文件",
+        };
+    } catch (e) {
+        return {
+            name: call.name,
+            success: false,
+            error: `读取失败: ${e instanceof Error ? e.message : String(e)}`,
+            continueConversation: false
+        };
+    }
+}
 
 async function executeSendFileTool(call: ToolCall): Promise<ToolResult> {
     const capability = getInternalCapability(SEND_FILE_CAPABILITY_ID);
