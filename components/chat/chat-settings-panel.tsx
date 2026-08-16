@@ -1141,7 +1141,7 @@ export function ChatSettingsPanel({
                                     <span className="menu-label menu-label-danger">开发者权限（危险）</span>
                                     <span className="menu-desc">允许 TA 读写你的 GitHub 仓库代码</span>
                                 </div>
-                                <div className="menu-right">
+                                <div className="menu-right" onClick={e => e.stopPropagation()}>
                                     <Toggle
                                         checked={session.developerModeEnabled === true}
                                         onChange={c => { updateSession({ developerModeEnabled: c }); }}
