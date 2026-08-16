@@ -8,7 +8,7 @@ import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-pars
 import { isKnownStickerLabel } from "@/lib/sticker-data";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
-import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
+import { PhotoInputModal, TextPhotoModal, TextFileInputModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal, type ChatTextFileSelection } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
@@ -83,6 +83,7 @@ import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
 import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
+import { storeMediaBlob } from "@/lib/media-cache-storage";
 
 // ── Call system message detection ──────────────────────────
 // Call messages are stored with user/assistant role for correct prompt alternation,
@@ -481,7 +482,7 @@ type PendingMessageJump = {
 };
 
 const TRANSIENT_MESSAGE_PREFIX = "ui-transient-";
-type RichModalKind = "photo" | "text_photo" | "red_packet" | "transfer" | "location" | "transfer_target" | "voice_msg" | "gift" | "system_instruction";
+type RichModalKind = "photo" | "text_photo" | "file" | "red_packet" | "transfer" | "location" | "transfer_target" | "voice_msg" | "gift" | "system_instruction";
 type ChatTextInputHandle = {
     appendText: (text: string, options?: { focus?: boolean }) => void;
     clear: () => void;
@@ -714,6 +715,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     const plusMenuItems = [
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>, label: "照片墙", onClick: () => onOpenRichModal("photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="14" y2="12" /><line x1="7" y1="16" x2="11" y2="16" /></svg>, label: "文字图片", onClick: () => onOpenRichModal("text_photo") },
+        { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>, label: "文件", onClick: () => onOpenRichModal("file") },
         { icon: <AlertCircle size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "系统指令", onClick: () => onOpenRichModal("system_instruction") },
         { icon: <Clapperboard size={22} strokeWidth={1.5} color={theaterMode ? "var(--c-icon-active)" : "var(--c-text)"} />, label: "番外指令模式", active: theaterMode, onClick: onToggleTheaterMode },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>, label: "视频通话", onClick: onStartVideoCall },
@@ -3251,6 +3253,27 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         };
         updateMessageMediaData(msg.id, updatedData);
         return { ...msg, mediaData: updatedData };
+    };
+
+    const handleSendTextFile = async (selection: ChatTextFileSelection): Promise<void> => {
+        if (!ensureGroupSpeakPermission()) return;
+        if (isGenerating) {
+            showChatToast("请先等待对方回复");
+            return;
+        }
+        try {
+            const mimeType = selection.file.type || "text/plain";
+            const mediaUrl = await storeMediaBlob(selection.file, mimeType, "file");
+            const sent = sendRichMessage(
+                "media_file",
+                { fileType: "file", fileName: selection.file.name },
+                selection.file.name,
+                mediaUrl,
+            );
+            if (sent) setRichModal(null);
+        } catch (error) {
+            showChatToast(`文件保存失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
     };
 
     const sendRichMessage = (mediaType: ChatMessage["mediaType"], mediaData: ChatMessage["mediaData"], content: string = "", mediaUrl?: string): boolean => {
@@ -6043,6 +6066,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             {richModal === "text_photo" && (
                 <TextPhotoModal
                     onSend={(text) => { setRichModal(null); sendRichMessage("image", { label: text }); }}
+                    onClose={() => setRichModal(null)}
+                />
+            )}
+            {richModal === "file" && (
+                <TextFileInputModal
+                    onSend={(selection) => { void handleSendTextFile(selection); }}
                     onClose={() => setRichModal(null)}
                 />
             )}
