@@ -2000,12 +2000,12 @@ function CharArchiveView({
 
   const archiveFrame = (
       <div className="char-archive-frame">
-        <div className="char-archive-stamp">CLASSIFIED</div>
+        <div className="char-archive-stamp">绝密</div>
 
         <div className="char-archive-header">
           <div>
-            <div className="char-archive-title">{isEditing ? "EDITING ARCHIVE" : "ARCHIVAL\nINFORMATION"}</div>
-            <div className="char-archive-subtitle">THE INTELLIGENCE DATABASE</div>
+            <div className="char-archive-title">{isEditing ? "编辑档案" : "档案\n信息"}</div>
+            <div className="char-archive-subtitle">情报数据库</div>
           </div>
           <div className="char-archive-id">ID: {char.id.slice(0, 8).toUpperCase()}</div>
         </div>
@@ -2077,11 +2077,11 @@ function CharArchiveView({
 
             {/* Name Box moved to the top of Right Column */}
             <div className="char-archive-name-box flex-1 flex flex-col justify-center text-left border-b border-[var(--c-panel-border)]" style={{ padding: "4px 6px 8px 6px" }}>
-              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">TARGET NAME / CODENAME</span>
+              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">目标姓名 / 代号</span>
               {isEditing ? (
                 <input
                   className="char-archive-input ts-20 font-black w-full text-left bg-[var(--c-input)]/50 border border-dashed border-[#666] font-inherit tracking-[1px]"
-                  placeholder="Name or Codename"
+                  placeholder="姓名或代号"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   style={{
@@ -2090,24 +2090,24 @@ function CharArchiveView({
                 />
               ) : (
                 <h2 className="whitespace-pre-wrap break-words ts-20 font-black m-0 tracking-[1px]">
-                  {name || "UNNAMED"}
+                  {name || "未命名"}
                 </h2>
               )}
             </div>
 
             <div className="char-archive-row">
               <div className="char-archive-cell" style={{ flex: 0.8 }}>
-                <span className="char-archive-label">Status</span>
-                <span className="char-archive-val">{isEditing ? "EDITING" : "ACTIVE"}</span>
+                <span className="char-archive-label">状态</span>
+                <span className="char-archive-val">{isEditing ? "编辑中" : "活跃"}</span>
               </div>
               <div className="char-archive-cell" style={{ flex: 1.5 }}>
-                <span className="char-archive-label">WeChat</span>
+                <span className="char-archive-label">微信号</span>
                 <span className="char-archive-val select-text cursor-text tracking-[-0.5px]">
                   {char.wechatID || "N/A"}
                 </span>
               </div>
               <div className="char-archive-cell" style={{ flex: 1.1 }}>
-                <span className="char-archive-label">Update</span>
+                <span className="char-archive-label">更新日期</span>
                 <span className="char-archive-val">{char.updatedAt ? char.updatedAt.slice(0, 10).replace(/-/g, "/") : "N/A"}</span>
               </div>
             </div>
@@ -2117,7 +2117,7 @@ function CharArchiveView({
 
         <div className="char-archive-row">
           <div className="char-archive-cell" style={{ flex: 1.8 }}>
-            <span className="char-archive-label">Tags</span>
+            <span className="char-archive-label">标签</span>
             <div className="flex flex-wrap gap-2">
               {tags.map((t, i) => (
                 <div key={i} className="char-archive-tag">
@@ -2148,7 +2148,7 @@ function CharArchiveView({
             </div>
           </div>
           <div className="char-archive-cell" style={{ flex: 1.2 }}>
-            <span className="char-archive-label">Timezone</span>
+            <span className="char-archive-label">时区</span>
             {isEditing ? (
               <div className="char-timezone-picker">
                 <button
@@ -2169,7 +2169,7 @@ function CharArchiveView({
         <div className="char-archive-text-section border-b-0">
           <div className="char-log-entry mb-4">
             <div className="char-log-entry-header">
-              <span>PERSONA / TRAITS</span>
+              <span>设定 / 特征</span>
             </div>
             {isEditing ? (
               <AutoResizingTextarea
