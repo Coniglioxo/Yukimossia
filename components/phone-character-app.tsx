@@ -1010,7 +1010,7 @@ function CharListView({
   return (
     <>
       <PageShell
-        title={<strong style={{ fontWeight: 900, fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '1.15em', letterSpacing: '0.04em' }}>TARGET ARCHIVES</strong>}
+        title={<strong style={{ fontWeight: 900, fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '1.15em', letterSpacing: '0.04em' }}>目标卷宗</strong>}
         leftAction={
           <button
             className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-black/5 text-[#666] hover:bg-black/10 transition-colors"
@@ -1051,20 +1051,20 @@ function CharListView({
             <div className="wt-bottom-pill">
               <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'import'; setShowStylePicker(true); }}>
                 <IconImport />
-                <span>IMPORT</span>
+                <span>导入</span>
               </button>
               <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'create'; setShowStylePicker(true); }}>
                 <IconPlus />
-                <span>CREATE</span>
+                <span>新建</span>
               </button>
               {isEditing && (
                 <button className="wt-bottom-pill-btn" onClick={() => setIsPropsMenuOpen(true)}>
-                  <IconPlus /> <span>PROPS</span>
+                  <IconPlus /> <span>道具</span>
                 </button>
               )}
               <button className="wt-bottom-pill-btn wt-bottom-pill-active" onClick={() => setShowNpcGen(true)}>
                 <IconPlus />
-                <span>NPC</span>
+                <span>配角</span>
               </button>
               <input
                 ref={fileRef} type="file" accept=".json,.png,image/png,application/json" className="hidden"
@@ -1174,7 +1174,7 @@ function CharListView({
                   <div className={`char-polaroid-tape-base ${tapeStyles[tapeMod]}`} style={{ top: -10, width: tapeWidth, transform: `translateX(-50%) rotate(${tapeRot}deg)` }} />
                   {hash % 3 === 0 && (
                     <div className="char-clue-label" style={{ top: -10, left: -6, transform: `rotate(${-(char.canvasRot || 0) - 5}deg)` }}>
-                      0{idx + 1} ASSET
+                      0{idx + 1} 资产
                     </div>
                   )}
                   <div className="char-polaroid-img-wrapper" style={{ boxShadow: "inset 0 0 10px rgba(0,0,0,0.1)" }}>
@@ -1963,7 +1963,7 @@ function CharArchiveView({
   }
 
   // Helper limits
-  const personaText = persona || "NO DATA AVAILABLE.";
+  const personaText = persona || "暂无设定资料。";
   const timeZoneOptions = getCharacterTimeZoneOptions(timeZone || timeZoneSearch);
   const timeZoneQuery = timeZoneSearch.trim().toLowerCase();
   const matchedTimeZoneOptions = timeZoneQuery
@@ -2156,11 +2156,11 @@ function CharArchiveView({
                   className="char-timezone-trigger"
                   onClick={openTimeZonePicker}
                 >
-                  {timeZone || "SYSTEM"}
+                  {timeZone || "系统默认"}
                 </button>
               </div>
             ) : (
-              <span className="char-archive-val">{timeZone || "SYSTEM"}</span>
+              <span className="char-archive-val">{timeZone || "系统默认"}</span>
             )}
           </div>
         </div>
@@ -2267,9 +2267,9 @@ function CharArchiveView({
               </>
             ) : !dummy && !isEditing ? (
               <>
-                <button className="char-archive-btn" onClick={onExportPng}>EXPORT IMG</button>
-                <button className="char-archive-btn" onClick={onExportJson}>EXPORT JSON</button>
-                <button className="char-archive-btn char-archive-btn-danger" onClick={() => setConfirmDelete(true)}>DELETE</button>
+                <button className="char-archive-btn" onClick={onExportPng}>导出图片</button>
+                <button className="char-archive-btn" onClick={onExportJson}>导出配置</button>
+                <button className="char-archive-btn char-archive-btn-danger" onClick={() => setConfirmDelete(true)}>删除</button>
               </>
             ) : null
           )}
