@@ -360,6 +360,7 @@ export function ChatSettingsPanel({
         setPreviewHtml("");
         setShowStatusRegionDialog(true);
     };
+    const [isDeveloper, setIsDeveloper] = useState(() => Boolean((session as Record<string, unknown>).isDeveloper));
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
