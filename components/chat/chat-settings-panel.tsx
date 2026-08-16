@@ -1133,6 +1133,66 @@ export function ChatSettingsPanel({
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    {!session.isGroup && (
+                        <>
+                            <div className="menu-item">
+                                <ChatInfoIcon icon={Code} color="var(--c-danger)" />
+                                <div className="menu-label-group">
+                                    <span className="menu-label menu-label-danger">开发者权限（危险）</span>
+                                    <span className="menu-desc">允许 TA 读写你的 GitHub 仓库代码</span>
+                                </div>
+                                <div className="menu-right">
+                                    <Toggle
+                                        checked={session.developerModeEnabled === true}
+                                        onChange={c => { updateSession({ developerModeEnabled: c }); }}
+                                    />
+                                </div>
+                            </div>
+                            {session.developerModeEnabled && (
+                                <div className="flex flex-col gap-2 px-4 pb-3 pt-1" style={{ background: "var(--c-soft-bg)" }}>
+                                    <input
+                                        type="text"
+                                        className="ui-input text-xs w-full"
+                                        placeholder="GitHub 用户名 (如 Coniglioxo)"
+                                        value={session.developerGithubUsername || ""}
+                                        onChange={e => updateSession({ developerGithubUsername: e.target.value })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="ui-input text-xs w-full"
+                                        placeholder="仓库名 (如 Yukimossia)"
+                                        value={session.developerGithubRepo || ""}
+                                        onChange={e => updateSession({ developerGithubRepo: e.target.value })}
+                                    />
+                                    <input
+                                        type="password"
+                                        className="ui-input text-xs w-full"
+                                        placeholder="GitHub PAT (用于突破限流与提交代码)"
+                                        value={session.developerGithubPat || ""}
+                                        onChange={e => updateSession({ developerGithubPat: e.target.value })}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="ui-input text-xs w-full"
+                                        placeholder="目标分支 (缺省为 main)"
+                                        value={session.developerGithubBranch || ""}
+                                        onChange={e => updateSession({ developerGithubBranch: e.target.value })}
+                                    />
+                                    <div className="flex items-center justify-between pt-2">
+                                        <span className="ts-12 text-[var(--c-text)]">代码提交模式</span>
+                                        <select
+                                            className="ui-input text-xs py-1"
+                                            value={session.developerCommitMode || "confirm"}
+                                            onChange={e => updateSession({ developerCommitMode: e.target.value as "confirm" | "direct" })}
+                                        >
+                                            <option value="confirm">提交前需我确认 (安全)</option>
+                                            <option value="direct">直接提交推送到仓库 (危险)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
                         <div className="menu-label-group"><span className="menu-label">自定义 CSS 样式</span></div>
