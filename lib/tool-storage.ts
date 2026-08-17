@@ -493,8 +493,8 @@ export function getEnabledTools(appId?: string, injectDeveloperCapability: boole
     return tools;
 }
 
-export function findEnabledToolForSchema(name: string, appId?: string, macroContext?: ToolNameMacroContext): EnabledTool | undefined {
-    const direct = getEnabledTools(appId).find(t => toolNameMatches(t.name, name, macroContext));
+export function findEnabledToolForSchema(name: string, appId?: string, macroContext?: ToolNameMacroContext, injectDeveloperCapability: boolean = false): EnabledTool | undefined {
+    const direct = getEnabledTools(appId, injectDeveloperCapability).find(t => toolNameMatches(t.name, name, macroContext));
     if (direct) return direct;
 
     const compositePackages = loadCompositeToolPackages().filter(pkg => pkg.enabled);
