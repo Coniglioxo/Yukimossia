@@ -524,7 +524,7 @@ export function findEnabledToolForSchema(name: string, appId?: string, macroCont
         };
     }
 
-    const internalSubTool = findEnabledInternalSubToolDefinition(name, appId);
+    const internalSubTool = findEnabledInternalSubToolDefinition(name, appId, true);
     if (internalSubTool) {
         return {
             name: internalSubTool.tool.name,

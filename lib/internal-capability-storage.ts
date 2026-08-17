@@ -1610,8 +1610,14 @@ export function getInternalCapabilitySubToolDefinitions(
 export function findEnabledInternalSubToolDefinition(
     name: string,
     appId?: string,
+    injectDeveloperCapability: boolean = false,
 ): { capability: InternalCapabilityConfig; tool: InternalToolDefinition } | null {
-    for (const capability of getEnabledInternalCapabilities(appId)) {
+    const capabilities = getEnabledInternalCapabilities(appId);
+    if (injectDeveloperCapability) {
+        const dev = getInternalCapability(GITHUB_DEVELOPER_CAPABILITY_ID);
+        if (dev) capabilities.push(dev);
+    }
+    for (const capability of capabilities) {
         const tool = getInternalCapabilitySubToolDefinition(capability, name);
         if (tool) return { capability, tool };
     }
