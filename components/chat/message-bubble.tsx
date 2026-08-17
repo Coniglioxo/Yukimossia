@@ -26,6 +26,7 @@ import { formatShoppingPaymentRequestHistory } from "@/lib/shopping-payment-requ
 import { toCustomAppIconId } from "@/lib/custom-app-types";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
 import { CHAT_PLUGIN_SLOTS_CHANGED_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
+import { FileCode, CheckCircle2, FileEdit, FolderPlus, GitCommit } from "lucide-react";
 
 interface MessageBubbleProps {
     msg: ChatMessage;
@@ -112,6 +113,9 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
         case "music_share":
             return <MusicShareBubble msg={msg} onPlay={onMusicPlay} />;
         case "media_file":
+            if (msg.mediaUrl === "github_diff_preview") {
+                return <GithubDiffPreviewBubble msg={msg} onUpdate={onUpdate} />;
+            }
             return <MediaFileBubble msg={msg} onUpdate={onUpdate} characterId={characterId} />;
         case "xiaohongshu_note_share":
             return <XiaohongshuShareBubble msg={msg} />;
@@ -2102,6 +2106,104 @@ function MusicShareBubble({ msg, onPlay }: { msg: ChatMessage; onPlay?: (title: 
             <div className="chat-music-share-footer">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                 <span>音乐</span>
+            </div>
+        </div>
+    );
+}
+
+// ── GitHub Diff Preview Bubble ──────────────────────────
+
+function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate?: (updated: ChatMessage) => void }) {
+    const title = msg.mediaData?.title || "代码修改提案";
+    const meta = msg.mediaData?.meta as any || {};
+    const files = Array.isArray(meta.stagingInfo) ? meta.stagingInfo : [];
+    const isConfirmed = msg.mediaData?.status === "confirmed";
+    const [committing, setCommitting] = useState(false);
+
+    const handleConfirm = async () => {
+        if (isConfirmed || committing || !onUpdate) return;
+        setCommitting(true);
+        try {
+            // Call the tool executor directly bypassing chat engine for this specific confirmation
+            const { executeToolCalls } = await import("@/lib/tool-executor");
+            const args = meta.args || {};
+            const results = await executeToolCalls([
+                { name: "PUBLISH_GITHUB_COMMIT", args, actor: "assistant" }
+            ], { sessionId: msg.sessionId });
+            
+            const result = results[0];
+            if (result.success) {
+                onUpdate({
+                    ...msg,
+                    mediaData: { ...msg.mediaData, status: "confirmed" },
+                    content: "代码已成功提交。"
+                });
+                // You might want to dispatch a system message or notification here
+            } else {
+                alert(`提交失败: ${result.error}`);
+                setCommitting(false);
+            }
+        } catch (e) {
+            alert(`执行异常: ${e instanceof Error ? e.message : String(e)}`);
+            setCommitting(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center w-[280px] my-2 cursor-default select-text"
+             style={{ 
+                 background: "var(--c-glass-bg)",
+                 backdropFilter: "blur(12px)",
+                 WebkitBackdropFilter: "blur(12px)",
+                 border: "1px solid var(--c-border)",
+                 borderRadius: "16px",
+                 boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+                 overflow: "hidden"
+             }}>
+            <div className="w-full flex items-center justify-center pt-4 pb-2 text-[var(--c-text-title)]">
+                <GitCommit size={28} strokeWidth={1.5} />
+            </div>
+            <div className="w-full px-4 text-center pb-3 border-b border-[var(--c-border)]">
+                <div className="ts-15 font-semibold text-[var(--c-text-title)] leading-tight">
+                    {title.replace(/^提案:\s*/, "")}
+                </div>
+                <div className="ts-11 text-[var(--c-subtext)] mt-1.5">
+                    {files.length} 个文件被修改
+                </div>
+            </div>
+            
+            <div className="w-full px-4 py-3 flex flex-col gap-2 max-h-[140px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+                {files.map((f: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 ts-12 text-[var(--c-text)]">
+                        <FileCode size={14} className="shrink-0 opacity-60" />
+                        <span className="truncate">{f}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="w-full p-3 bg-[var(--c-soft-bg)]">
+                {isConfirmed ? (
+                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-success)] font-medium">
+                        <CheckCircle2 size={16} />
+                        已提交到仓库
+                    </div>
+                ) : (
+                    <button 
+                        onClick={handleConfirm}
+                        disabled={committing}
+                        className="w-full ui-btn ui-btn-primary rounded-xl py-2 flex items-center justify-center gap-1.5"
+                        style={{ borderRadius: "10px" }}
+                    >
+                        {committing ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                            </svg>
+                        ) : (
+                            <FileEdit size={15} />
+                        )}
+                        {committing ? "提交中..." : "确认并提交"}
+                    </button>
+                )}
             </div>
         </div>
     );
