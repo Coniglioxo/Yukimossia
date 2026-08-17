@@ -855,7 +855,8 @@ function isGithubDeveloperToolName(name: string): boolean {
         || name === "LIST_GITHUB_DIR"
         || name === "WRITE_GITHUB_FILE"
         || name === "EDIT_GITHUB_FILE"
-        || name === "PUBLISH_GITHUB_COMMIT";
+        || name === "PUBLISH_GITHUB_COMMIT"
+        || name === "DISCARD_GITHUB_STAGING";
 }
 
 const MAX_LOCAL_DATA_RESULT_LENGTH = 12000;
@@ -2235,6 +2236,16 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                 name: toolName, success: true,
                 data: `已成功编辑 ${path} 并放入暂存区。请继续操作，或使用 PUBLISH_GITHUB_COMMIT 提交。`,
                 continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "DISCARD_GITHUB_STAGING") {
+            if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
+            return {
+                name: toolName, success: true,
+                data: "暂存区已清空，所有未提交的修改已放弃。",
+                continueConversation: true, persistToHistory: false,
+                userNotice: "已清空代码修改暂存区"
             };
         }
 

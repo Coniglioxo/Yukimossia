@@ -549,6 +549,11 @@ const GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA = JSON.stringify({
     required: ["message"]
 });
 
+const GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {}
+});
+
 const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
     {
         name: "READ_GITHUB_FILE",
@@ -574,6 +579,11 @@ const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
         name: "PUBLISH_GITHUB_COMMIT",
         description: "把提交暂存区的全部修改作为一个 PR 提案发给用户确认，或直接提交到仓库。",
         parameterSchema: GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA,
+    },
+    {
+        name: "DISCARD_GITHUB_STAGING",
+        description: "清空暂存区，放弃所有未提交的修改。",
+        parameterSchema: GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA,
     },
 ];
 
@@ -630,6 +640,12 @@ const GITHUB_DEVELOPER_USAGE_GUIDE = [
     "  - message (string): 提交信息 (Commit message)",
     "示例：",
     '[执行动作:PUBLISH_GITHUB_COMMIT({"message":"feat: 添加暗色模式支持"})]',
+    "",
+    "动作：DISCARD_GITHUB_STAGING",
+    "描述：清空暂存区，放弃所有未提交的修改。当用户拒绝提案或你想重新开始时使用。",
+    "参数：无",
+    "示例：",
+    "[执行动作:DISCARD_GITHUB_STAGING({})]"
 ].join("\n");
 
 const NOTE_WALL_SUBTOOLS: InternalToolDefinition[] = [

@@ -2188,21 +2188,40 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                         已提交到仓库
                     </div>
                 ) : (
-                    <button 
-                        onClick={handleConfirm}
-                        disabled={committing}
-                        className="w-full ui-btn ui-btn-primary rounded-xl py-2 flex items-center justify-center gap-1.5"
-                        style={{ borderRadius: "10px" }}
-                    >
-                        {committing ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                            </svg>
-                        ) : (
-                            <FileEdit size={15} />
-                        )}
-                        {committing ? "提交中..." : "确认并提交"}
-                    </button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={async () => {
+                                if (committing || !onUpdate) return;
+                                setCommitting(true);
+                                try {
+                                    const { executeToolCalls } = await import("@/lib/tool-executor");
+                                    await executeToolCalls([{ name: "DISCARD_GITHUB_STAGING", args: {}, actor: "assistant" }], { sessionId: msg.sessionId });
+                                    onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "confirmed" }, content: "已拒绝该提案并清空暂存区。" });
+                                } catch (e) { alert(`操作失败: ${e}`); }
+                                setCommitting(false);
+                            }}
+                            disabled={committing}
+                            className="flex-1 ui-btn ui-btn-ghost rounded-xl py-2"
+                            style={{ borderRadius: "10px" }}
+                        >
+                            拒绝
+                        </button>
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={committing}
+                            className="flex-[2] ui-btn ui-btn-primary rounded-xl py-2 flex items-center justify-center gap-1.5"
+                            style={{ borderRadius: "10px" }}
+                        >
+                            {committing ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                                </svg>
+                            ) : (
+                                <FileEdit size={15} />
+                            )}
+                            {committing ? "提交中..." : "确认并提交"}
+                        </button>
+                    </div>
                 )}
             </div>
         </div>
