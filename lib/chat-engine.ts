@@ -1877,7 +1877,7 @@ export async function buildChatPromptMessages(
     const isOfflineMode = options?.appTags?.includes("offline") === true;
     const effectiveAppTags = mergeAppTags(options?.appTags, promptProfile?.appTags, resolvedAppId);
     const toolsAllowed = options?.toolsAllowed !== false && !isOfflineMode;
-    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId) : [];
+    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId, session.developerModeEnabled === true) : [];
     const toolsEnabled = enabledTools.length > 0
         && (options?.forceEnableTools === true || presetIncludesToolsMacro(preset, resolvedAppId, effectiveAppTags));
     const usesNativeActions = Boolean(toolsEnabled && nativeToolProtocolForConfig(config));
@@ -2324,7 +2324,7 @@ export async function generateChatCompletion(
     const { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, history, options);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
 
-    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat").length > 0) {
+    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true).length > 0) {
         return generateNativeChatCompletion({
             session,
             llmMessages,
