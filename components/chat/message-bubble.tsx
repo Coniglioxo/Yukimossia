@@ -2187,6 +2187,10 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                         <CheckCircle2 size={16} />
                         已提交到仓库
                     </div>
+                ) : msg.mediaData?.status === "declined" ? (
+                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-danger)] font-medium">
+                        已拒绝并清空暂存区
+                    </div>
                 ) : (
                     <div className="flex gap-2">
                         <button 
@@ -2196,7 +2200,16 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                 try {
                                     const { executeToolCalls } = await import("@/lib/tool-executor");
                                     await executeToolCalls([{ name: "DISCARD_GITHUB_STAGING", args: {}, actor: "assistant" }], { sessionId: msg.sessionId });
-                                    onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "confirmed" }, content: "已拒绝该提案并清空暂存区。" });
+                                    
+                                    // 发送一条系统消息给 AI，让它知道提案被拒绝了
+                                    const { pushChatMessage } = await import("@/lib/chat-storage");
+                                    pushChatMessage({
+                                        sessionId: msg.sessionId,
+                                        role: "system",
+                                        content: "[系统提示：用户已拒绝你的代码修改提案，并清空了暂存区。如果你还需要修改，请重新从头读取和编辑。]"
+                                    });
+                                    
+                                    onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "declined" }, content: "已拒绝该提案并清空暂存区。" });
                                 } catch (e) { alert(`操作失败: ${e}`); }
                                 setCommitting(false);
                             }}
