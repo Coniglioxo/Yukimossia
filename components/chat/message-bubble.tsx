@@ -2150,7 +2150,7 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
     };
 
     return (
-        <div className="flex flex-col items-center w-[280px] my-2 cursor-default select-text"
+        <div className="chat-github-diff-card flex flex-col items-center w-[280px] my-2 cursor-default select-text"
              style={{ 
                  background: "var(--c-glass-bg)",
                  backdropFilter: "blur(12px)",
