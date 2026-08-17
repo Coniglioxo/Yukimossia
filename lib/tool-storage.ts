@@ -10,6 +10,7 @@ import {
     findEnabledInternalSubToolDefinition,
     getEnabledInternalCapabilities,
     getInternalCapabilityToolDefinition,
+    getInternalCapability,
 } from "./internal-capability-storage";
 import { loadCustomAppToolsForContext, type RegisteredCustomAppExtension } from "./custom-app-sdk-registry";
 import type { CustomAppToolDefinition } from "./custom-app-types";
