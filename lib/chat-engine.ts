@@ -2420,7 +2420,7 @@ export async function generateChatCompletion(
                 const tool = findEnabledToolForSchema(fetch.name, options?.appId ?? "chat", {
                     characterName: character.name,
                     userName: userIdentity?.name ?? "用户",
-                });
+                }, session.developerModeEnabled === true);
                 const schemaContent = tool
                     ? formatToolSchema(tool, {
                         characterName: character.name,
