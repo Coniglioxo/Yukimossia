@@ -776,6 +776,7 @@ async function executeInternalTool(call: ToolCall, context?: ToolExecutionContex
     if (isCalendarToolName(call.name)) return executeCalendarTool(call, context);
     if (isLocalDataToolName(call.name)) return executeLocalDataTool(call);
     if (isToolboxManagementToolName(call.name)) return executeToolboxManagementTool(call);
+    if (isGithubDeveloperToolName(call.name)) return executeGithubDeveloperTool(call, context);
     if (call.name === "发送文件") return executeSendFileTool(call);
     if (call.name === "角色电脑") return executeAgentComputerTool(call, context);
     if (call.name === "读取聊天文件") return executeReadHistoryFileTool(call, context);
@@ -847,6 +848,12 @@ function isToolboxManagementToolName(name: string): boolean {
         || name === "更新组合工具"
         || name === "设置组合工具启用"
         || name === "删除组合工具";
+}
+
+function isGithubDeveloperToolName(name: string): boolean {
+    return name === "READ_GITHUB_FILE"
+        || name === "LIST_GITHUB_DIR"
+        || name === "WRITE_GITHUB_FILE";
 }
 
 const MAX_LOCAL_DATA_RESULT_LENGTH = 12000;
@@ -2098,6 +2105,138 @@ async function executeReadHistoryFileTool(call: ToolCall, context?: ToolExecutio
             error: `读取失败: ${e instanceof Error ? e.message : String(e)}`,
             continueConversation: false
         };
+    }
+}
+
+async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
+    const args = call.args || {};
+    const toolName = call.name;
+
+    const failed = (msg: string): ToolResult => ({
+        name: toolName, success: false, error: msg, continueConversation: true, persistToHistory: false
+    });
+
+    if (!context?.sessionId) return failed("缺少会话信息");
+    const { loadChatSessions } = await import("./chat-storage");
+    const session = loadChatSessions().find(s => s.id === context.sessionId);
+    if (!session || !session.developerModeEnabled) return failed("未开启开发者权限");
+
+    const username = session.developerGithubUsername?.trim();
+    const repo = session.developerGithubRepo?.trim();
+    const pat = session.developerGithubPat?.trim();
+    const branch = session.developerGithubBranch?.trim() || "main";
+    if (!username || !repo || !pat) return failed("请先在配置中填写 GitHub 用户名、仓库名和 PAT");
+
+    const headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": `Bearer ${pat}`
+    };
+
+    try {
+        if (toolName === "LIST_GITHUB_DIR") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) return failed(`API 请求失败: ${res.status}`);
+            const data = await res.json();
+            if (!Array.isArray(data)) return failed("该路径不是一个目录");
+            const listing = data.map(item => `${item.type === "dir" ? "[目录]" : "[文件]"} ${item.path}`).join("\n");
+            return {
+                name: toolName, success: true, data: `目录 ${path || "/"} 内容：\n${listing}`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "READ_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            if (!path) return failed("缺少 path");
+            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) return failed(`读取失败 (可能文件不存在): ${res.status}`);
+            const data = await res.json();
+            if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
+            const content = decodeURIComponent(escape(atob(data.content)));
+            
+            let lines = content.split("\n");
+            const totalLines = lines.length;
+            const startLine = typeof args.startLine === "number" ? Math.max(1, args.startLine) : 1;
+            const endLine = typeof args.endLine === "number" ? Math.min(totalLines, args.endLine) : totalLines;
+            
+            if (startLine > 1 || endLine < totalLines) {
+                lines = lines.slice(startLine - 1, endLine);
+            }
+            
+            return {
+                name: toolName, success: true,
+                data: `文件 ${path} (总 ${totalLines} 行)${startLine > 1 || endLine < totalLines ? ` (显示 ${startLine}-${endLine} 行)` : ""}：\n${lines.join("\n")}`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "WRITE_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const content = typeof args.content === "string" ? args.content : "";
+            const message = typeof args.message === "string" ? args.message.trim() || `Update ${path}` : `Update ${path}`;
+            if (!path) return failed("缺少 path");
+
+            // 拦截确认模式
+            const commitMode = session.developerCommitMode || "confirm";
+            if (commitMode === "confirm" && !args._confirmed) {
+                return {
+                    name: toolName,
+                    success: true,
+                    data: "等待用户确认代码修改...",
+                    continueConversation: false, // 停下来等用户点
+                    persistToHistory: true,
+                    userNotice: "提交了代码修改提案",
+                    mediaAttachments: [{
+                        type: "file",
+                        url: "github_diff_preview", // 这里用个假协议标记，界面层可以拦截渲染卡片
+                        title: `提案: ${message}`,
+                        // 把参数原样带出去，这样用户确认后再调一次带 _confirmed: true
+                        meta: { action: "github_commit_proposal", args: { ...args, _confirmed: true } }
+                    }]
+                };
+            }
+
+            // 获取原文件 sha (为了覆盖更新)
+            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+            const res = await fetch(url, { headers });
+            let sha = "";
+            if (res.ok) {
+                const data = await res.json();
+                sha = data.sha;
+            }
+
+            // 提交写入
+            const encodedContent = btoa(unescape(encodeURIComponent(content)));
+            const putRes = await fetch(`https://api.github.com/repos/${username}/${repo}/contents/${path}`, {
+                method: "PUT",
+                headers,
+                body: JSON.stringify({
+                    message,
+                    content: encodedContent,
+                    branch,
+                    ...(sha ? { sha } : {})
+                })
+            });
+            
+            if (!putRes.ok) {
+                const errData = await putRes.json().catch(() => ({}));
+                return failed(`提交失败: ${putRes.status} ${errData.message || ""}`);
+            }
+
+            return {
+                name: toolName, success: true,
+                data: `文件 ${path} 已成功提交到 GitHub。`,
+                continueConversation: true, persistToHistory: false,
+                userNotice: `已向 GitHub 提交代码: ${path}`
+            };
+        }
+
+        return failed("未知的 GitHub 开发者工具名");
+    } catch (err) {
+        return failed(`执行出错: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 

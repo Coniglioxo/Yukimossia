@@ -15,6 +15,7 @@ export const LOCAL_DATA_LIBRARY_CAPABILITY_ID = "local_data_library";
 export const TOOLBOX_MANAGEMENT_CAPABILITY_ID = "toolbox_management";
 export const TIMED_WAKE_CAPABILITY_ID = "timed_wake";
 export const READ_HISTORY_FILE_CAPABILITY_ID = "read_history_file";
+export const GITHUB_DEVELOPER_CAPABILITY_ID = "github_developer";
 
 export type InternalToolDefinition = {
     name: string;
@@ -502,6 +503,84 @@ const CALENDAR_DELETE_PARAMETER_SCHEMA = JSON.stringify({
         keyword: { type: "string", description: "事项关键词；没有 itemId 时必填" },
     },
 });
+
+const GITHUB_READ_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要读取的文件路径，如 components/chat/chat-settings-panel.tsx" },
+        startLine: { type: "number", description: "起始行号（可选）" },
+        endLine: { type: "number", description: "结束行号（可选）" }
+    },
+    required: ["path"]
+});
+
+const GITHUB_LIST_DIR_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要列出的目录路径，留空或 / 表示根目录" }
+    }
+});
+
+const GITHUB_WRITE_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要修改或新建的文件路径" },
+        content: { type: "string", description: "文件的完整新内容" },
+        message: { type: "string", description: "提交信息 (Commit message)" }
+    },
+    required: ["path", "content", "message"]
+});
+
+const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
+    {
+        name: "READ_GITHUB_FILE",
+        description: "读取仓库指定文件的代码内容。",
+        parameterSchema: GITHUB_READ_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "LIST_GITHUB_DIR",
+        description: "列出仓库指定目录下的文件，方便找路。",
+        parameterSchema: GITHUB_LIST_DIR_PARAMETER_SCHEMA,
+    },
+    {
+        name: "WRITE_GITHUB_FILE",
+        description: "修改或新建文件代码。如果是 confirm 模式，会生成代码差异预览卡片让用户确认；如果是 direct 模式，直接提交生效。",
+        parameterSchema: GITHUB_WRITE_FILE_PARAMETER_SCHEMA,
+    },
+];
+
+const GITHUB_DEVELOPER_USAGE_GUIDE = [
+    "以下是你获取指令的返回结果：",
+    "服务：GitHub 开发者",
+    "用途：读取和修改用户的 GitHub 仓库代码。你被授权作为协作者，可以直接提交代码。",
+    "",
+    "执行时必须使用下面的具体动作名。",
+    "",
+    "动作：LIST_GITHUB_DIR",
+    "描述：列出仓库指定目录下的文件，方便找路。",
+    "参数：",
+    "  - path (string): 目录路径，留空或 / 表示根目录",
+    "示例：",
+    '[执行动作:LIST_GITHUB_DIR({"path":"components/ui"})]',
+    "",
+    "动作：READ_GITHUB_FILE",
+    "描述：读取仓库指定文件的代码内容。修改前必须先读取。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - startLine (number): 起始行号（可选）",
+    "  - endLine (number): 结束行号（可选）",
+    "示例：",
+    '[执行动作:READ_GITHUB_FILE({"path":"package.json"})]',
+    "",
+    "动作：WRITE_GITHUB_FILE",
+    "描述：修改或新建文件代码。修改前请确保已用 READ_GITHUB_FILE 查看过原文件。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - content (string): 文件的完整新内容",
+    "  - message (string): 提交信息 (Commit message)",
+    "示例：",
+    '[执行动作:WRITE_GITHUB_FILE({"path":"README.md","content":"# 新内容","message":"docs: 更新文档"})]',
+].join("\n");
 
 const NOTE_WALL_SUBTOOLS: InternalToolDefinition[] = [
     {
@@ -1279,6 +1358,15 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
         createdAt: 0,
         updatedAt: 0,
     },
+    {
+        id: GITHUB_DEVELOPER_CAPABILITY_ID,
+        name: "GitHub 开发者",
+        description: "允许 AI 角色直接读取并修改你的 GitHub 仓库代码。仅在聊天设置中开启了开发者权限时可用。",
+        enabled: false, // 由 settings 中的 developerModeEnabled 动态控制
+        mode: "auto",
+        createdAt: 0,
+        updatedAt: 0,
+    },
 ];
 
 export function loadInternalCapabilities(): InternalCapabilityConfig[] {
@@ -1307,6 +1395,8 @@ export function getEnabledInternalCapabilities(appId?: string): InternalCapabili
         if (!item.enabled || item.mode === "off") return false;
         // 角色电脑是可插拔模块：没连接就不注入，模型完全看不见
         if (item.id === AGENT_COMPUTER_CAPABILITY_ID && !isAgentComputerConfigured()) return false;
+        // GitHub 开发者能力由聊天设置注入时覆盖，这里如果是查全局列表默认不返回
+        if (item.id === GITHUB_DEVELOPER_CAPABILITY_ID) return false;
         return true;
     });
 }
@@ -1391,6 +1481,14 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
             usageGuide: TIMED_WAKE_USAGE_GUIDE,
         };
     }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return {
+            name: capability.name,
+            description: capability.description,
+            parameterSchema: "{}",
+            usageGuide: GITHUB_DEVELOPER_USAGE_GUIDE,
+        };
+    }
     return null;
 }
 
@@ -1413,6 +1511,9 @@ export function getInternalCapabilitySubToolDefinition(
     if (capability.id === TOOLBOX_MANAGEMENT_CAPABILITY_ID) {
         return TOOLBOX_MANAGEMENT_SUBTOOLS.find(tool => tool.name === name) ?? null;
     }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return GITHUB_DEVELOPER_SUBTOOLS.find(tool => tool.name === name) ?? null;
+    }
     return null;
 }
 
@@ -1433,6 +1534,9 @@ export function getInternalCapabilitySubToolDefinitions(
     }
     if (capability.id === TOOLBOX_MANAGEMENT_CAPABILITY_ID) {
         return TOOLBOX_MANAGEMENT_SUBTOOLS;
+    }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return GITHUB_DEVELOPER_SUBTOOLS;
     }
     return [];
 }

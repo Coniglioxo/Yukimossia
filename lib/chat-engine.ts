@@ -2666,7 +2666,7 @@ export async function previewPromptRequestSnapshot(
 
     const { llmMessages, character, config, preset, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, effectiveHistory, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
-    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat") : [];
+    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true) : [];
     const meta = { characterName: character.name, userName: userIdentity?.name };
 
     if (nativeToolProtocolForConfig(config) && enabledTools.length > 0) {

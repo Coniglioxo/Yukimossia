@@ -360,7 +360,7 @@ export type EnabledTool = {
     mcpTools?: McpDiscoveredTool[];
 };
 
-export function getEnabledTools(appId?: string): EnabledTool[] {
+export function getEnabledTools(appId?: string, injectDeveloperCapability: boolean = false): EnabledTool[] {
     const tools: EnabledTool[] = [];
 
     const restTools = loadRestTools();
@@ -435,7 +435,13 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
         });
     }
 
-    for (const capability of getEnabledInternalCapabilities(appId)) {
+    const capabilities = getEnabledInternalCapabilities(appId);
+    if (injectDeveloperCapability) {
+        const devCapability = getInternalCapability("github_developer");
+        if (devCapability) capabilities.push(devCapability);
+    }
+
+    for (const capability of capabilities) {
         const tool = getInternalCapabilityToolDefinition(capability);
         if (!tool) continue;
         tools.push({
