@@ -1615,7 +1615,7 @@ export function findEnabledInternalSubToolDefinition(
     const capabilities = getEnabledInternalCapabilities(appId);
     if (injectDeveloperCapability) {
         const dev = getInternalCapability(GITHUB_DEVELOPER_CAPABILITY_ID);
-        if (dev) capabilities.push(dev);
+        if (dev) capabilities.push({ ...dev, enabled: true });
     }
     for (const capability of capabilities) {
         const tool = getInternalCapabilitySubToolDefinition(capability, name);

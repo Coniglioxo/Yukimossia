@@ -439,7 +439,7 @@ export function getEnabledTools(appId?: string, injectDeveloperCapability: boole
     const capabilities = getEnabledInternalCapabilities(appId);
     if (injectDeveloperCapability) {
         const devCapability = getInternalCapability("github_developer");
-        if (devCapability) capabilities.push(devCapability);
+        if (devCapability) capabilities.push({ ...devCapability, enabled: true });
     }
 
     for (const capability of capabilities) {
