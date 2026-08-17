@@ -853,7 +853,9 @@ function isToolboxManagementToolName(name: string): boolean {
 function isGithubDeveloperToolName(name: string): boolean {
     return name === "READ_GITHUB_FILE"
         || name === "LIST_GITHUB_DIR"
-        || name === "WRITE_GITHUB_FILE";
+        || name === "WRITE_GITHUB_FILE"
+        || name === "EDIT_GITHUB_FILE"
+        || name === "PUBLISH_GITHUB_COMMIT";
 }
 
 const MAX_LOCAL_DATA_RESULT_LENGTH = 12000;
@@ -2173,11 +2175,73 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             };
         }
 
+        // 本地读取暂存区数据，若无则初始化
+        const stagingKey = `ai_phone_dev_staging_${context.sessionId}`;
+        let staging: Record<string, string> = {};
+        if (typeof window !== "undefined") {
+            const raw = localStorage.getItem(stagingKey);
+            if (raw) try { staging = JSON.parse(raw); } catch { /* skip */ }
+        }
+
         if (toolName === "WRITE_GITHUB_FILE") {
             const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
             const content = typeof args.content === "string" ? args.content : "";
-            const message = typeof args.message === "string" ? args.message.trim() || `Update ${path}` : `Update ${path}`;
             if (!path) return failed("缺少 path");
+            
+            staging[path] = content;
+            if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
+
+            return {
+                name: toolName, success: true,
+                data: `已将 ${path} 的全量修改写入暂存区。请继续改其他文件，或使用 PUBLISH_GITHUB_COMMIT 提交。`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "EDIT_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const findStr = typeof args.find === "string" ? args.find : "";
+            const replaceStr = typeof args.replace === "string" ? args.replace : "";
+            const replaceAll = args.all === true;
+            if (!path || !findStr) return failed("缺少 path 或 find");
+
+            // 如果暂存区没有该文件，先从 GitHub 拉取原文
+            let currentContent = staging[path];
+            if (currentContent === undefined) {
+                const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+                const res = await fetch(url, { headers });
+                if (!res.ok) return failed(`拉取原文失败 (可能文件不存在): ${res.status}`);
+                const data = await res.json();
+                if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
+                currentContent = decodeURIComponent(escape(atob(data.content)));
+            }
+
+            if (!currentContent.includes(findStr)) {
+                return failed("替换失败：原文中未找到指定的 find 片段，请核对是否完全一致。");
+            }
+
+            if (replaceAll) {
+                currentContent = currentContent.split(findStr).join(replaceStr);
+            } else {
+                const count = currentContent.split(findStr).length - 1;
+                if (count > 1) return failed(`替换失败：原文中找到了 ${count} 处匹配片段，不唯一。如果想全替换请使用 all:true，否则请提供更长、更唯一的上下文片段。`);
+                currentContent = currentContent.replace(findStr, replaceStr);
+            }
+
+            staging[path] = currentContent;
+            if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
+
+            return {
+                name: toolName, success: true,
+                data: `已成功编辑 ${path} 并放入暂存区。请继续操作，或使用 PUBLISH_GITHUB_COMMIT 提交。`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "PUBLISH_GITHUB_COMMIT") {
+            const message = typeof args.message === "string" ? args.message.trim() || "Update via AI Phone" : "Update via AI Phone";
+            const filesToCommit = Object.keys(staging);
+            if (filesToCommit.length === 0) return failed("暂存区为空，没有需要提交的文件");
 
             // 拦截确认模式
             const commitMode = session.developerCommitMode || "confirm";
@@ -2191,46 +2255,87 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                     userNotice: "提交了代码修改提案",
                     mediaAttachments: [{
                         type: "file",
-                        url: "github_diff_preview", // 这里用个假协议标记，界面层可以拦截渲染卡片
+                        url: "github_diff_preview",
                         title: `提案: ${message}`,
-                        // 把参数原样带出去，这样用户确认后再调一次带 _confirmed: true
-                        meta: { action: "github_commit_proposal", args: { ...args, _confirmed: true } }
+                        meta: { 
+                            action: "github_commit_proposal", 
+                            args: { ...args, _confirmed: true },
+                            stagingInfo: Object.keys(staging) // 传给 UI 用的文件列表
+                        }
                     }]
                 };
             }
 
-            // 获取原文件 sha (为了覆盖更新)
-            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
-            const res = await fetch(url, { headers });
-            let sha = "";
-            if (res.ok) {
-                const data = await res.json();
-                sha = data.sha;
+            // 确认提交，执行 GitHub Tree API 提交流程
+            // 1. 获取基础树
+            const refUrl = `https://api.github.com/repos/${username}/${repo}/git/ref/heads/${branch}`;
+            const refRes = await fetch(refUrl, { headers });
+            if (!refRes.ok) return failed(`获取分支信息失败: ${refRes.status}`);
+            const refData = await refRes.json();
+            const baseCommitSha = refData.object.sha;
+
+            const commitUrl = `https://api.github.com/repos/${username}/${repo}/git/commits/${baseCommitSha}`;
+            const commitRes = await fetch(commitUrl, { headers });
+            const commitData = await commitRes.json();
+            const baseTreeSha = commitData.tree.sha;
+
+            // 2. 为每个文件创建 blob
+            const treeItems = [];
+            for (const path of filesToCommit) {
+                const content = staging[path];
+                const blobRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/blobs`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({ content, encoding: "utf-8" })
+                });
+                if (!blobRes.ok) return failed(`创建 blob 失败 (${path}): ${blobRes.status}`);
+                const blobData = await blobRes.json();
+                treeItems.push({
+                    path,
+                    mode: "100644",
+                    type: "blob",
+                    sha: blobData.sha
+                });
             }
 
-            // 提交写入
-            const encodedContent = btoa(unescape(encodeURIComponent(content)));
-            const putRes = await fetch(`https://api.github.com/repos/${username}/${repo}/contents/${path}`, {
-                method: "PUT",
+            // 3. 创建新树
+            const treeRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/trees`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+            });
+            if (!treeRes.ok) return failed(`创建新树失败: ${treeRes.status}`);
+            const treeData = await treeRes.json();
+
+            // 4. 创建提交
+            const newCommitRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/commits`, {
+                method: "POST",
                 headers,
                 body: JSON.stringify({
                     message,
-                    content: encodedContent,
-                    branch,
-                    ...(sha ? { sha } : {})
+                    tree: treeData.sha,
+                    parents: [baseCommitSha]
                 })
             });
-            
-            if (!putRes.ok) {
-                const errData = await putRes.json().catch(() => ({}));
-                return failed(`提交失败: ${putRes.status} ${errData.message || ""}`);
-            }
+            if (!newCommitRes.ok) return failed(`创建提交失败: ${newCommitRes.status}`);
+            const newCommitData = await newCommitRes.json();
+
+            // 5. 更新引用
+            const updateRefRes = await fetch(refUrl, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ sha: newCommitData.sha })
+            });
+            if (!updateRefRes.ok) return failed(`更新分支失败: ${updateRefRes.status}`);
+
+            // 提交成功，清空暂存区
+            if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
 
             return {
                 name: toolName, success: true,
-                data: `文件 ${path} 已成功提交到 GitHub。`,
+                data: `成功修改了 ${filesToCommit.length} 个文件并提交到 GitHub。`,
                 continueConversation: true, persistToHistory: false,
-                userNotice: `已向 GitHub 提交代码: ${path}`
+                userNotice: `已向 GitHub 提交 ${filesToCommit.length} 个文件的修改提案`
             };
         }
 

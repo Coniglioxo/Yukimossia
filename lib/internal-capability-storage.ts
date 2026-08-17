@@ -524,11 +524,29 @@ const GITHUB_LIST_DIR_PARAMETER_SCHEMA = JSON.stringify({
 const GITHUB_WRITE_FILE_PARAMETER_SCHEMA = JSON.stringify({
     type: "object",
     properties: {
-        path: { type: "string", description: "要修改或新建的文件路径" },
-        content: { type: "string", description: "文件的完整新内容" },
+        path: { type: "string", description: "要新建或整体覆盖的文件路径" },
+        content: { type: "string", description: "文件的完整新内容" }
+    },
+    required: ["path", "content"]
+});
+
+const GITHUB_EDIT_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要修改的文件路径" },
+        find: { type: "string", description: "原文片段（须唯一，原样匹配）" },
+        replace: { type: "string", description: "替换为的新代码片段" },
+        all: { type: "boolean", description: "是否替换全部匹配项，默认 false" }
+    },
+    required: ["path", "find", "replace"]
+});
+
+const GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
         message: { type: "string", description: "提交信息 (Commit message)" }
     },
-    required: ["path", "content", "message"]
+    required: ["message"]
 });
 
 const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
@@ -544,15 +562,31 @@ const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
     },
     {
         name: "WRITE_GITHUB_FILE",
-        description: "修改或新建文件代码。如果是 confirm 模式，会生成代码差异预览卡片让用户确认；如果是 direct 模式，直接提交生效。",
+        description: "新建文件或整体覆盖已有文件内容，写入提交暂存区。",
         parameterSchema: GITHUB_WRITE_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "EDIT_GITHUB_FILE",
+        description: "修改已有内容的首选方式（通过 find/replace 片段替换）。只输出改动片段，不要整体重写大文件，改动进入提交暂存区。",
+        parameterSchema: GITHUB_EDIT_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "PUBLISH_GITHUB_COMMIT",
+        description: "把提交暂存区的全部修改作为一个 PR 提案发给用户确认，或直接提交到仓库。",
+        parameterSchema: GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA,
     },
 ];
 
 const GITHUB_DEVELOPER_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
     "服务：GitHub 开发者",
-    "用途：读取和修改用户的 GitHub 仓库代码。你被授权作为协作者，可以直接提交代码。",
+    "用途：读取和修改用户的 GitHub 仓库代码。你被授权作为高级驻场工程师，拥有多文件暂存区能力。",
+    "",
+    "工作流：",
+    "1. 用 LIST_GITHUB_DIR 找文件，用 READ_GITHUB_FILE 读取源码核对。",
+    "2. 改已有内容一律用 EDIT_GITHUB_FILE（只替换片段），绝不整体重写大文件；写全新文件时才用 WRITE_GITHUB_FILE。",
+    "3. 所有的 WRITE 和 EDIT 都只是把修改放入你的『本地暂存区』。",
+    "4. 多个文件全部改完后，必须调用 PUBLISH_GITHUB_COMMIT 把暂存区打包发出，系统会生成代码差异预览卡片让用户最终确认。",
     "",
     "执行时必须使用下面的具体动作名。",
     "",
@@ -564,7 +598,7 @@ const GITHUB_DEVELOPER_USAGE_GUIDE = [
     '[执行动作:LIST_GITHUB_DIR({"path":"components/ui"})]',
     "",
     "动作：READ_GITHUB_FILE",
-    "描述：读取仓库指定文件的代码内容。修改前必须先读取。",
+    "描述：读取仓库指定文件的代码内容。修改前必读，核对原文。",
     "参数：",
     "  - path (string): 文件路径",
     "  - startLine (number): 起始行号（可选）",
@@ -572,14 +606,30 @@ const GITHUB_DEVELOPER_USAGE_GUIDE = [
     "示例：",
     '[执行动作:READ_GITHUB_FILE({"path":"package.json"})]',
     "",
+    "动作：EDIT_GITHUB_FILE",
+    "描述：修改代码的首选工具（find/replace）。要求 find 提供的片段在原文中必须完全一致且唯一。改动会进入暂存区。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - find (string): 要替换的原文片段",
+    "  - replace (string): 替换为的新代码片段",
+    "  - all (boolean): 是否替换全部匹配项，默认 false",
+    "示例：",
+    '[执行动作:EDIT_GITHUB_FILE({"path":"app/page.tsx","find":"<div className=\"old\">","replace":"<div className=\"new\">"})]',
+    "",
     "动作：WRITE_GITHUB_FILE",
-    "描述：修改或新建文件代码。修改前请确保已用 READ_GITHUB_FILE 查看过原文件。",
+    "描述：新建文件或整体覆盖写入。改动会进入暂存区。",
     "参数：",
     "  - path (string): 文件路径",
     "  - content (string): 文件的完整新内容",
+    "示例：",
+    '[执行动作:WRITE_GITHUB_FILE({"path":"README.md","content":"# 新内容"})]',
+    "",
+    "动作：PUBLISH_GITHUB_COMMIT",
+    "描述：把暂存区的修改打包发起提交。",
+    "参数：",
     "  - message (string): 提交信息 (Commit message)",
     "示例：",
-    '[执行动作:WRITE_GITHUB_FILE({"path":"README.md","content":"# 新内容","message":"docs: 更新文档"})]',
+    '[执行动作:PUBLISH_GITHUB_COMMIT({"message":"feat: 添加暗色模式支持"})]',
 ].join("\n");
 
 const NOTE_WALL_SUBTOOLS: InternalToolDefinition[] = [
