@@ -360,7 +360,13 @@ export function ChatSettingsPanel({
         setPreviewHtml("");
         setShowStatusRegionDialog(true);
     };
-    const [isDeveloper, setIsDeveloper] = useState(() => Boolean((session as Record<string, unknown>).isDeveloper));
+    const [developerModeEnabled, setDeveloperModeEnabled] = useState(session.developerModeEnabled === true);
+    const [showDeveloperDialog, setShowDeveloperDialog] = useState(false);
+    const [devUsername, setDevUsername] = useState(session.developerGithubUsername || "");
+    const [devRepo, setDevRepo] = useState(session.developerGithubRepo || "");
+    const [devPat, setDevPat] = useState(session.developerGithubPat || "");
+    const [devBranch, setDevBranch] = useState(session.developerGithubBranch || "");
+    const [devCommitMode, setDevCommitMode] = useState(session.developerCommitMode || "confirm");
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
@@ -1136,62 +1142,23 @@ export function ChatSettingsPanel({
                 <div className="menu-group">
                     {!session.isGroup && (
                         <>
-                            <div className="menu-item">
+                            <div className="menu-item cursor-pointer" onClick={() => developerModeEnabled && setShowDeveloperDialog(true)}>
                                 <ChatInfoIcon icon={Code} color="var(--c-danger)" />
                                 <div className="menu-label-group">
                                     <span className="menu-label menu-label-danger">开发者权限（危险）</span>
-                                    <span className="menu-desc">允许 TA 读写你的 GitHub 仓库代码</span>
+                                    <span className="menu-desc">{developerModeEnabled ? "已启用——点此配置 GitHub 授权" : "允许 TA 读写你的 GitHub 仓库代码"}</span>
                                 </div>
                                 <div className="menu-right" onClick={e => e.stopPropagation()}>
                                     <Toggle
-                                        checked={session.developerModeEnabled === true}
-                                        onChange={c => { updateSession({ developerModeEnabled: c }); }}
+                                        checked={developerModeEnabled}
+                                        onChange={c => {
+                                            setDeveloperModeEnabled(c);
+                                            updateSession({ developerModeEnabled: c });
+                                            if (c) setShowDeveloperDialog(true);
+                                        }}
                                     />
                                 </div>
                             </div>
-                            {session.developerModeEnabled && (
-                                <div className="flex flex-col gap-2 px-4 pb-3 pt-1" style={{ background: "var(--c-soft-bg)" }}>
-                                    <input
-                                        type="text"
-                                        className="ui-input text-xs w-full"
-                                        placeholder="GitHub 用户名 (如 Coniglioxo)"
-                                        value={session.developerGithubUsername || ""}
-                                        onChange={e => updateSession({ developerGithubUsername: e.target.value })}
-                                    />
-                                    <input
-                                        type="text"
-                                        className="ui-input text-xs w-full"
-                                        placeholder="仓库名 (如 Yukimossia)"
-                                        value={session.developerGithubRepo || ""}
-                                        onChange={e => updateSession({ developerGithubRepo: e.target.value })}
-                                    />
-                                    <input
-                                        type="password"
-                                        className="ui-input text-xs w-full"
-                                        placeholder="GitHub PAT (用于突破限流与提交代码)"
-                                        value={session.developerGithubPat || ""}
-                                        onChange={e => updateSession({ developerGithubPat: e.target.value })}
-                                    />
-                                    <input
-                                        type="text"
-                                        className="ui-input text-xs w-full"
-                                        placeholder="目标分支 (缺省为 main)"
-                                        value={session.developerGithubBranch || ""}
-                                        onChange={e => updateSession({ developerGithubBranch: e.target.value })}
-                                    />
-                                    <div className="flex items-center justify-between pt-2">
-                                        <span className="ts-12 text-[var(--c-text)]">代码提交模式</span>
-                                        <select
-                                            className="ui-input text-xs py-1"
-                                            value={session.developerCommitMode || "confirm"}
-                                            onChange={e => updateSession({ developerCommitMode: e.target.value as "confirm" | "direct" })}
-                                        >
-                                            <option value="confirm">提交前需我确认 (安全)</option>
-                                            <option value="direct">直接提交推送到仓库 (危险)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
                         </>
                     )}
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
@@ -1697,6 +1664,99 @@ export function ChatSettingsPanel({
                                 }}
                             >
                                 保存并启用
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Developer Settings */}
+            {showDeveloperDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold text-[var(--c-text-title)] text-[var(--c-danger)]">GitHub 开发者授权</div>
+                            <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowDeveloperDialog(false)}><X size={18} /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-3">
+                            <p className="ts-12 text-[var(--c-subtext)] leading-relaxed mb-1">
+                                此功能将允许 AI 角色直接读取并修改你的 GitHub 仓库代码。请确保你信任该模型，并仅在你拥有写权限的仓库中使用。
+                            </p>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">GitHub 用户名</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Coniglioxo"
+                                    value={devUsername}
+                                    onChange={e => setDevUsername(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">仓库名称</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Yukimossia"
+                                    value={devRepo}
+                                    onChange={e => setDevRepo(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">访问令牌 (PAT)</label>
+                                <input
+                                    type="password"
+                                    className="ui-input ts-13"
+                                    placeholder="需要 repo 权限，用于读取私有库与提交代码"
+                                    value={devPat}
+                                    onChange={e => setDevPat(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">目标分支</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="留空默认为 main"
+                                    value={devBranch}
+                                    onChange={e => setDevBranch(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 mt-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">代码提交模式</label>
+                                <select
+                                    className="ui-input ts-13"
+                                    value={devCommitMode}
+                                    onChange={e => setDevCommitMode(e.target.value as "confirm" | "direct")}
+                                >
+                                    <option value="confirm">提交前需要我在界面确认 (安全)</option>
+                                    <option value="direct">直接提交并推送到仓库 (危险)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[var(--c-border)] p-4 bg-[var(--c-soft-bg)]">
+                            <button 
+                                type="button" 
+                                className="ui-btn ui-btn-ghost flex-1"
+                                onClick={() => setShowDeveloperDialog(false)}
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-danger flex-1"
+                                onClick={() => {
+                                    updateSession({
+                                        developerGithubUsername: devUsername,
+                                        developerGithubRepo: devRepo,
+                                        developerGithubPat: devPat,
+                                        developerGithubBranch: devBranch,
+                                        developerCommitMode: devCommitMode
+                                    });
+                                    setShowDeveloperDialog(false);
+                                }}
+                            >
+                                保存配置
                             </button>
                         </div>
                     </div>
