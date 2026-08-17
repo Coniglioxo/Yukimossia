@@ -2081,7 +2081,7 @@ async function generateNativeChatCompletion(
     },
 ): Promise<ChatCompletionResult> {
     const { session, llmMessages, character, config, preset, regexes, userIdentity, options, callbacks } = params;
-    const enabledTools = getEnabledTools(options?.appId ?? "chat");
+    const enabledTools = getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
     const persistedSession = loadChatSessions().find(item => item.id === session.id);
     let expandedSourceIds = normalizeNativeExpandedToolSourceIds(
