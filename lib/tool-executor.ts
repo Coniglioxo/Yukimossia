@@ -2156,12 +2156,22 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
         if (toolName === "READ_GITHUB_FILE") {
             const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
             if (!path) return failed("缺少 path");
-            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
-            const res = await fetch(url, { headers });
-            if (!res.ok) return failed(`读取失败 (可能文件不存在): ${res.status}`);
-            const data = await res.json();
-            if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
-            const content = decodeURIComponent(escape(atob(data.content)));
+            
+            let content = "";
+            let isFromStaging = false;
+            
+            // 优先从暂存区读取，让 AI 能看到自己刚修改过的内容
+            if (staging[path] !== undefined) {
+                content = staging[path];
+                isFromStaging = true;
+            } else {
+                const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+                const res = await fetch(url, { headers });
+                if (!res.ok) return failed(`读取失败 (可能文件不存在): ${res.status}`);
+                const data = await res.json();
+                if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
+                content = decodeURIComponent(escape(atob(data.content)));
+            }
             
             let lines = content.split("\n");
             const totalLines = lines.length;
@@ -2172,9 +2182,10 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                 lines = lines.slice(startLine - 1, endLine);
             }
             
+            const sourceLabel = isFromStaging ? " (⚠️暂存区最新未提交版本)" : "";
             return {
                 name: toolName, success: true,
-                data: `文件 ${path} (总 ${totalLines} 行)${startLine > 1 || endLine < totalLines ? ` (显示 ${startLine}-${endLine} 行)` : ""}：\n${lines.join("\n")}`,
+                data: `文件 ${path}${sourceLabel} (总 ${totalLines} 行)${startLine > 1 || endLine < totalLines ? ` (显示 ${startLine}-${endLine} 行)` : ""}：\n${lines.join("\n")}`,
                 continueConversation: true, persistToHistory: false
             };
         }
