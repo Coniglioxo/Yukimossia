@@ -2987,13 +2987,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         for (const result of results) {
             for (const att of result.mediaAttachments || []) {
                 throwIfGenerationStopped(guard);
+                // GitHub diff preview needs special mediaData structure
+                const mediaData = att.url === "github_diff_preview"
+                    ? { title: att.title, meta: att.meta, status: "pending" }
+                    : { fileType: att.type, fileName: att.title };
                 const msg = pushChatMessage({
                     sessionId: session.id,
                     role: "assistant",
                     content: att.title || "",
                     mediaType: "media_file",
                     mediaUrl: att.url,
-                    mediaData: { fileType: att.type, fileName: att.title },
+                    mediaData,
                     toolExecutionId,
                     ...(session.isGroup ? {
                         senderCharacterId: result.actorCharacterId,
