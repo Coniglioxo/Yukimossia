@@ -2353,7 +2353,9 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             const newCommitData = await newCommitRes.json();
 
             // 5. 更新引用
-            const updateRefRes = await fetch(refUrl, {
+            // 注意：GitHub API 获取用 /git/ref/，但更新必须用 /git/refs/（复数）
+            const updateRefUrl = `https://api.github.com/repos/${username}/${repo}/git/refs/heads/${branch}`;
+            const updateRefRes = await fetch(updateRefUrl, {
                 method: "PATCH",
                 headers,
                 body: JSON.stringify({ sha: newCommitData.sha })
