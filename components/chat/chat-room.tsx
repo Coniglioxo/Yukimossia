@@ -3618,6 +3618,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         if (!isCurrentGeneration()) return;
                         persistHiddenAssistantToolCall(content, options);
                     },
+                    onToolExecution: (results, _historyContent, options) => {
+                        if (!isCurrentGeneration()) return;
+                        handleToolExecution(results, generationGuard, options?.toolExecutionId);
+                    },
                     onNativeToolAssistantTurn: async ({ content, rawContent, reasoning, openRouterReasoningDetails, toolCalls }) => {
                         if (!isCurrentGeneration()) return;
                         // Publish the visible turn (text + stickers / images / red packets /
