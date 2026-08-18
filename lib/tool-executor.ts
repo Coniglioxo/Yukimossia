@@ -2111,6 +2111,9 @@ async function executeReadHistoryFileTool(call: ToolCall, context?: ToolExecutio
     }
 }
 
+// 内存级缓存，解决同轮多次调用时的并发竞态问题
+const githubStagingMemoryCache = new Map<string, Record<string, string>>();
+
 async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
     const args = call.args || {};
     const toolName = call.name;
@@ -2176,12 +2179,13 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             };
         }
 
-        // 本地读取暂存区数据，若无则初始化
+        // 本地读取暂存区数据，优先使用内存缓存解决同轮并发竞态问题
         const stagingKey = `ai_phone_dev_staging_${context.sessionId}`;
-        let staging: Record<string, string> = {};
-        if (typeof window !== "undefined") {
+        let staging: Record<string, string> = githubStagingMemoryCache.get(stagingKey) || {};
+        if (!githubStagingMemoryCache.has(stagingKey) && typeof window !== "undefined") {
             const raw = localStorage.getItem(stagingKey);
             if (raw) try { staging = JSON.parse(raw); } catch { /* skip */ }
+            githubStagingMemoryCache.set(stagingKey, staging);
         }
 
         if (toolName === "WRITE_GITHUB_FILE") {
@@ -2190,6 +2194,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             if (!path) return failed("缺少 path");
             
             staging[path] = content;
+            githubStagingMemoryCache.set(stagingKey, staging);
             if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
 
             return {
@@ -2230,6 +2235,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             }
 
             staging[path] = currentContent;
+            githubStagingMemoryCache.set(stagingKey, staging);
             if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
 
             return {
@@ -2240,6 +2246,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
         }
 
         if (toolName === "DISCARD_GITHUB_STAGING") {
+            githubStagingMemoryCache.delete(stagingKey);
             if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
             return {
                 name: toolName, success: true,
@@ -2343,6 +2350,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             if (!updateRefRes.ok) return failed(`更新分支失败: ${updateRefRes.status}`);
 
             // 提交成功，清空暂存区
+            githubStagingMemoryCache.delete(stagingKey);
             if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
 
             return {
