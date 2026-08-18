@@ -2270,7 +2270,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                         title: `提案: ${message}`,
                         meta: { 
                             action: "github_commit_proposal", 
-                            args: { ...args, _confirmed: true },
+                            args: { ...args, _confirmed: true, _staging: staging },
                             stagingInfo: Object.keys(staging) // 传给 UI 用的文件列表
                         }
                     }]
