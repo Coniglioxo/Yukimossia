@@ -2153,6 +2153,15 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
             };
         }
 
+        // 本地读取暂存区数据，优先使用内存缓存解决同轮并发竞态问题
+        const stagingKey = `ai_phone_dev_staging_${context.sessionId}`;
+        let staging: Record<string, string> = githubStagingMemoryCache.get(stagingKey) || {};
+        if (!githubStagingMemoryCache.has(stagingKey) && typeof window !== "undefined") {
+            const raw = localStorage.getItem(stagingKey);
+            if (raw) try { staging = JSON.parse(raw); } catch { /* skip */ }
+            githubStagingMemoryCache.set(stagingKey, staging);
+        }
+
         if (toolName === "READ_GITHUB_FILE") {
             const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
             if (!path) return failed("缺少 path");
@@ -2188,15 +2197,6 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                 data: `文件 ${path}${sourceLabel} (总 ${totalLines} 行)${startLine > 1 || endLine < totalLines ? ` (显示 ${startLine}-${endLine} 行)` : ""}：\n${lines.join("\n")}`,
                 continueConversation: true, persistToHistory: false
             };
-        }
-
-        // 本地读取暂存区数据，优先使用内存缓存解决同轮并发竞态问题
-        const stagingKey = `ai_phone_dev_staging_${context.sessionId}`;
-        let staging: Record<string, string> = githubStagingMemoryCache.get(stagingKey) || {};
-        if (!githubStagingMemoryCache.has(stagingKey) && typeof window !== "undefined") {
-            const raw = localStorage.getItem(stagingKey);
-            if (raw) try { staging = JSON.parse(raw); } catch { /* skip */ }
-            githubStagingMemoryCache.set(stagingKey, staging);
         }
 
         if (toolName === "WRITE_GITHUB_FILE") {
