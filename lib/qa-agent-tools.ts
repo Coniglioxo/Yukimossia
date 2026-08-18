@@ -641,6 +641,7 @@ const githubStageFileTool: QaTool = {
         "    · append (可选) — true=追加到该路径已暂存内容末尾（大文件分轮写）",
         "    · clear (可选) — true=清空提交暂存区",
         '  调用：[执行动作:暂存提交文件({"path":"src/app.js","content":"…","append":true})]',
+        "  ⚠️ 警告：暂存提交文件（包含清空暂存区 clear）和提交修改必须在不同的回复中单独调用，绝对不能在同一次回复中混用！"
     ],
     async run(args) {
         if (args.clear === true) {
@@ -693,7 +694,7 @@ const githubCommitTool: QaTool = {
         required: ["message"],
     },
     description:
-        "把对仓库文件的修改（新增/覆盖/删除）提交上去。三种改法：新建/整写用 {path, content}；改已有大文件优先用片段替换 {path, find, replace}——只输出改动片段，省 token 且不会被输出上限截断；新写大文件先用「暂存提交文件」分轮写完，再用 {path, fromStaged:true} 引用。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。片段替换前先用「读取仓库文件」确认原文。",
+        "把对仓库文件的修改（新增/覆盖/删除）提交上去。三种改法：新建/整写用 {path, content}；改已有大文件优先用片段替换 {path, find, replace}——只输出改动片段，省 token 且不会被输出上限截断；新写大文件先用「暂存提交文件」分轮写完，再用 {path, fromStaged:true} 引用。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。片段替换前先用「读取仓库文件」确认原文。⚠️警告：如果使用了「暂存提交文件」，必须等上一轮暂存动作完全执行成功后，再在新的单独一条回复中调用本动作提交，绝对不能在同一次回复里同时暂存并提交，否则会报错暂存区为空！", 
     schemaLines: [
         "  参数：",
         "    · message (必填) — 提交说明（一句话，中文）",
