@@ -2251,6 +2251,9 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
 
         if (toolName === "PUBLISH_GITHUB_COMMIT") {
             const message = typeof args.message === "string" ? args.message.trim() || "Update via AI Phone" : "Update via AI Phone";
+            if (args._staging && typeof args._staging === "object") {
+                staging = args._staging as Record<string, string>;
+            }
             const filesToCommit = Object.keys(staging);
             if (filesToCommit.length === 0) return failed("暂存区为空，没有需要提交的文件");
 
