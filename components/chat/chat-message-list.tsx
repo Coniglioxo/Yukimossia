@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useSyncExternalStore } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { ChevronLeft } from "lucide-react";
-import { loadChatSessions, loadChatContacts, ChatSession, createOrGetSession, createGroupSession, pushChatMessage, addChatContact, loadChatMessages, getLastVisibleSessionMessage, getChatMessagePreview } from "@/lib/chat-storage";
+import { loadChatSessions, loadChatContacts, ChatSession, createOrGetSession, createGroupSession, pushChatMessage, addChatContact, loadChatMessages, getLastVisibleSessionMessage, getChatMessagePreview, clearChatSessionMessages } from "@/lib/chat-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { Character } from "@/lib/character-types";
 import { resolveUserIdentity } from "@/lib/settings-storage";
@@ -637,6 +637,9 @@ function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, on
     const lastVisibleMessage = getLastVisibleSessionMessage(session.id);
     const preview = lastVisibleMessage ? (getChatMessagePreview(lastVisibleMessage) || lastVisibleMessage.content) : "";
     const displayTime = lastVisibleMessage?.createdAt || session.updatedAt;
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const longPressTriggeredRef = useRef(false);
 
     // Group chat: build grid of participant avatars (2×2)
     const isGroup = session.isGroup;
@@ -651,10 +654,47 @@ function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, on
         ].slice(0, 4)
         : [];
 
+    const handleTouchStart = (e: React.TouchEvent) => {
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            setShowClearConfirm(true);
+            // Haptic feedback if available
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+        }, 500);
+    };
+
+    const handleTouchEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleClick = (e: React.MouseEvent) => {
+        if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return;
+        }
+        onSelect();
+    };
+
+    const handleClearMessages = () => {
+        clearChatSessionMessages(session.id);
+        setShowClearConfirm(false);
+        window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId: session.id } }));
+    };
+
     return (
+        <>
         <div
             className={`minimal-list-item${isPinned ? ' chat-pinned' : ''}`}
-            onClick={onSelect}
+            onClick={handleClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
         >
             {isGroup ? (
                 <div className="minimal-avatar-wrapper grid grid-cols-2 grid-rows-2 gap-[1px] p-[2px] bg-[var(--c-card-border)] rounded-full overflow-hidden">
@@ -697,5 +737,35 @@ function SessionItem({ session, onSelect, isPinned }: { session: ChatSession, on
                 </div>
             </div>
         </div>
+
+        {/* Clear Confirmation Dialog */}
+        {showClearConfirm && (
+            <div className="modal-overlay" onClick={() => setShowClearConfirm(false)}>
+                <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+                    <div className="ts-17 font-semibold text-center text-[var(--c-text-title)] mb-4">
+                        清空聊天记录
+                    </div>
+                    <div className="text-center text-[var(--c-text)] ts-14 mb-6">
+                        确定要清空与「{isGroup ? (session.groupName || "群聊") : (session.alias || character?.name || "对方")}」的所有聊天记录吗？此操作不可恢复。
+                    </div>
+                    <div className="flex gap-3 w-full">
+                        <button
+                            onClick={() => setShowClearConfirm(false)}
+                            className="ui-btn ui-btn-ghost flex-1"
+                        >
+                            取消
+                        </button>
+                        <button
+                            onClick={handleClearMessages}
+                            className="ui-btn ui-btn-danger flex-1"
+                            style={{ background: 'var(--c-danger, #dc3545)', color: '#fff' }}
+                        >
+                            清空
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }
