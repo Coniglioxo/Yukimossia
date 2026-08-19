@@ -2124,9 +2124,22 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
         if (isConfirmed || committing || !onUpdate) return;
         setCommitting(true);
         try {
-            // Call the tool executor directly bypassing chat engine for this specific confirmation
+            // 从 localStorage 读取暂存区，而不是从消息历史的 meta.args._staging 读取
+            const stagingKey = `ai_phone_dev_staging_${msg.sessionId}`;
+            const rawStaging = typeof window !== "undefined" ? localStorage.getItem(stagingKey) : null;
+            let staging: Record<string, string> = {};
+            if (rawStaging) {
+                try { staging = JSON.parse(rawStaging); } catch { /* skip */ }
+            }
+            
+            if (Object.keys(staging).length === 0) {
+                alert("暂存区已清空，无法提交");
+                setCommitting(false);
+                return;
+            }
+            
             const { executeToolCalls } = await import("@/lib/tool-executor");
-            const args = meta.args || {};
+            const args = { ...(meta.args || {}), _staging: staging }; // 实时注入暂存区内容
             const results = await executeToolCalls([
                 { name: "PUBLISH_GITHUB_COMMIT", args, actor: "assistant" }
             ], { sessionId: msg.sessionId });
@@ -2138,7 +2151,6 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                     mediaData: { ...msg.mediaData, status: "confirmed" },
                     content: "代码已成功提交。"
                 });
-                // You might want to dispatch a system message or notification here
             } else {
                 alert(`提交失败: ${result.error}`);
                 setCommitting(false);

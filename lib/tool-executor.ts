@@ -2291,7 +2291,7 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                         title: `提案: ${message}`,
                         meta: { 
                             action: "github_commit_proposal", 
-                            args: { ...args, _confirmed: true, _staging: staging },
+                            args: { message, _confirmed: true }, // 只传 message，不传巨型 _staging 对象
                             stagingInfo: Object.keys(staging) // 传给 UI 用的文件列表
                         }
                     }]
