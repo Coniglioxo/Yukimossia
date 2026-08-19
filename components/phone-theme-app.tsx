@@ -1218,8 +1218,8 @@ function IconSkinPage({
         </button>
       )}
 
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-      <input ref={dockFileRef} type="file" accept="image/*" className="hidden" onChange={handleDockUpload} />
+      <input ref={fileRef} type="file" accept="*" className="hidden" onChange={handleUpload} />
+      <input ref={dockFileRef} type="file" accept="*" className="hidden" onChange={handleDockUpload} />
 
       {confirmDeleteId && (
         <ConfirmDialog
@@ -1421,7 +1421,7 @@ function WallpaperPage({
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept="*"
         className="hidden"
         onChange={handleUpload}
       />

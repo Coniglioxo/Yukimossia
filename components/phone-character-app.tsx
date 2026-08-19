@@ -1067,7 +1067,7 @@ function CharListView({
                 <span>配角</span>
               </button>
               <input
-                ref={fileRef} type="file" accept=".json,.png,image/png,application/json" className="hidden"
+                ref={fileRef} type="file" accept="*" className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) await handleImportFile(file);
@@ -2037,7 +2037,7 @@ function CharArchiveView({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="*"
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
