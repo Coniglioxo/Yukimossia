@@ -16,6 +16,8 @@ import {
     removeChatContact,
     normalizeVisionImagePromptLimit,
     MAX_VISION_IMAGE_PROMPT_LIMIT,
+    upsertImportedChatMessage,
+    reindexSessionMessageOrdersByTime,
     type ChatMessage,
 } from "@/lib/chat-storage";
 import {
@@ -1169,6 +1171,88 @@ export function ChatSettingsPanel({
                             <ChevronRight size={16} />
                         </div>
                     </button>
+                </div>
+
+                {/* Export/Import History */}
+                <div className="menu-group">
+                    <button className="menu-item" onClick={() => {
+                        try {
+                            const messages = loadChatMessages(session.id);
+                            const payload = {
+                                type: "ai-phone-chat-history",
+                                version: 1,
+                                sessionId: session.id,
+                                contactId: session.contactId,
+                                isGroup: session.isGroup || false,
+                                exportedAt: new Date().toISOString(),
+                                messageCount: messages.length,
+                                messages,
+                            };
+                            const fileName = session.isGroup
+                                ? `聊天记录-${groupName || "群聊"}-${new Date().toLocaleDateString()}.json`
+                                : `聊天记录-${characterName}-${new Date().toLocaleDateString()}.json`;
+                            void downloadFile(
+                                new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+                                fileName
+                            );
+                        } catch (error) {
+                            console.error("导出失败", error);
+                            alert("导出聊天记录失败，请重试");
+                        }
+                    }}>
+                        <ChatInfoIcon icon={Download} color={BINDING_ACCENTS.api} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导出聊天记录</span>
+                            <span className="menu-desc">导出为 JSON 文件备份</span>
+                        </div>
+                    </button>
+                    <label className="menu-item">
+                        <ChatInfoIcon icon={Upload} color={BINDING_ACCENTS.voice} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导入聊天记录</span>
+                            <span className="menu-desc">从 JSON 文件恢复聊天记录</span>
+                        </div>
+                        <input
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    try {
+                                        const parsed = JSON.parse(String(reader.result || "")) as Record<string, unknown>;
+                                        if (parsed.type !== "ai-phone-chat-history") {
+                                            alert("不是有效的聊天记录文件");
+                                            return;
+                                        }
+                                        const messages = parsed.messages;
+                                        if (!Array.isArray(messages)) {
+                                            alert("聊天记录格式错误");
+                                            return;
+                                        }
+                                        let imported = 0;
+                                        let skipped = 0;
+                                        for (const msg of messages) {
+                                            if (typeof msg === "object" && msg !== null && "id" in msg) {
+                                                const result = upsertImportedChatMessage(msg as ChatMessage);
+                                                if (result.inserted) imported++;
+                                                else skipped++;
+                                            }
+                                        }
+                                        reindexSessionMessageOrdersByTime(session.id);
+                                        alert(`导入完成：新增 ${imported} 条消息${skipped > 0 ? `，跳过 ${skipped} 条已存在的消息` : ""}`);
+                                    } catch (error) {
+                                        console.error("导入失败", error);
+                                        alert("导入聊天记录失败：文件格式错误");
+                                    }
+                                };
+                                reader.readAsText(file);
+                                e.target.value = "";
+                            }}
+                        />
+                    </label>
                 </div>
 
                 {/* Destructive Actions */}
