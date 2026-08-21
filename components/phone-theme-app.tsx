@@ -358,6 +358,24 @@ export function PhoneThemeApp({
                     </span>
                   </button>
                 ))}
+                {(() => {
+                  const iconItem = MENU_ITEMS.find(i => i.section === "pwa_icon")!;
+                  return (
+                    <button
+                      className="menu-item"
+                      type="button"
+                      onClick={() => setSection("pwa_icon")}
+                    >
+                      <span className="card-icon" style={menuIconStyle(iconItem.color)}>
+                        <iconItem.icon />
+                      </span>
+                      <span className="menu-label appearance-menu-item-label">{iconItem.label}</span>
+                      <span className="menu-right">
+                        <IconChevronRight />
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1640,7 +1658,7 @@ function PWAIconPage({ onNotice }: { onNotice: (text: string) => void }) {
             onClick={() => {
               const input = document.createElement("input");
               input.type = "file";
-              input.accept = "image/*";
+              // 这里故意去掉了 accept="image/*"，让它能调起 iOS 的文件系统
               input.onchange = async (e) => {
                 const file = (e.target as HTMLInputElement).files?.[0];
                 if (!file) return;
@@ -1663,7 +1681,7 @@ function PWAIconPage({ onNotice }: { onNotice: (text: string) => void }) {
             onClick={() => {
               const input = document.createElement("input");
               input.type = "file";
-              input.accept = "image/*";
+              // 去掉 accept="image/*" 调起文件管理器
               input.onchange = async (e) => {
                 const file = (e.target as HTMLInputElement).files?.[0];
                 if (!file) return;
