@@ -436,6 +436,8 @@ export function PhoneThemeApp({
           <GlobalCSSPage draft={draft} onDraftChange={onDraftChange} onApply={onApply} onNotice={onNotice} />
         ) : section === "icons" ? (
           <IconSkinPage draft={draft} onDraftChange={onDraftChange} onApply={onApply} onNotice={onNotice} />
+        ) : section === "pwa_icon" ? (
+          <PWAIconPage onNotice={onNotice} />
         ) : (
           <div className="flex-1 overflow-y-auto items-start justify-center flex">
             <p className="ts-14 text-[var(--c-icon)]">{"\u300C"}{SECTION_TITLES[section]}{"\u300D\u529F\u80FD\u5F00\u53D1\u4E2D\u2026"}</p>
@@ -1619,6 +1621,67 @@ function WallpaperPage({
           onCancel={handleDeleteCancel}
         />
       )}
+    </div>
+  );
+}
+
+function PWAIconPage({ onNotice }: { onNotice: (text: string) => void }) {
+  return (
+    <div className="theme-section-page p-4" style={{ gap: 14 }}>
+      <div className="g-card p-4">
+        <p className="ts-13 font-medium mb-3" style={{ color: "var(--c-text-title)" }}>{"安装到桌面的应用图标"}</p>
+        <p className="ts-11 text-[var(--c-icon)] leading-relaxed mb-4">
+          {"自定义 PWA 添加到桌面时的应用图标。替换后请在浏览器中重新选择「添加到主屏幕」。\n(提示：需要同时上传 192x192 和 512x512 两张图片。)"}
+        </p>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                try {
+                  const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                  await saveThemeAssetFromBlob(file, "wallpaper", "pwa_icon_192");
+                  onNotice("小图标 (192x192) 已上传");
+                } catch (err) {
+                  onNotice("小图标上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <span>上传小图标 (192x192)</span>
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                try {
+                  const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                  await saveThemeAssetFromBlob(file, "wallpaper", "pwa_icon_512");
+                  onNotice("大图标 (512x512) 已上传");
+                } catch (err) {
+                  onNotice("大图标上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <span>上传大图标 (512x512)</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
