@@ -2170,7 +2170,7 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                     });
                 });
                 
-                onUpdate(updatedMsg as ChatMessage);
+                setTimeout(() => onUpdate(updatedMsg as ChatMessage), 10);
                 // 只有在失败时才复位 committing 状态，成功后卡片直接切换到 confirmed 状态（不再渲染确认按钮）
             } else {
                 alert(`提交失败: ${result.error}`);
@@ -2297,7 +2297,7 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                         role: "system",
                                         content: "[系统提示：用户已拒绝你的代码修改提案，并清空了暂存区。如果你还需要修改，请重新从头读取和编辑。]"
                                     });
-                                    onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "declined" }, content: "已拒绝该提案并清空暂存区。" });
+                                    setTimeout(() => onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "declined" }, content: "已拒绝该提案并清空暂存区。" }), 10);
                                 } catch (e) { alert(`操作失败: ${e}`); }
                                 setCommitting(false);
                             }}
