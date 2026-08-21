@@ -554,6 +554,14 @@ const GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA = JSON.stringify({
     properties: {}
 });
 
+const GITHUB_UNDO_COMMIT_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        sha: { type: "string" },
+        parentSha: { type: "string" }
+    }
+});
+
 const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
     {
         name: "READ_GITHUB_FILE",
@@ -585,6 +593,11 @@ const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
         description: "清空暂存区，放弃所有未提交的修改。",
         parameterSchema: GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA,
     },
+    {
+        name: "UNDO_GITHUB_COMMIT",
+        description: "撤销指定的代码提交（前端内部使用）。",
+        parameterSchema: GITHUB_UNDO_COMMIT_PARAMETER_SCHEMA,
+    }
 ];
 
 const GITHUB_DEVELOPER_USAGE_GUIDE = [

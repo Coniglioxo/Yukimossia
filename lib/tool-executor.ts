@@ -2370,7 +2370,43 @@ async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutio
                 name: toolName, success: true,
                 data: `成功修改了 ${filesToCommit.length} 个文件并提交到 GitHub。`,
                 continueConversation: true, persistToHistory: false,
-                userNotice: `已向 GitHub 提交 ${filesToCommit.length} 个文件的修改提案`
+                userNotice: `已向 GitHub 提交 ${filesToCommit.length} 个文件的修改提案`,
+                // 返回 sha 供前端缓存用于撤销
+                _commitSha: newCommitData.sha,
+                _parentSha: baseCommitSha
+            };
+        }
+
+        if (toolName === "UNDO_GITHUB_COMMIT") {
+            const targetSha = args.sha;
+            const parentSha = args.parentSha;
+            if (!targetSha || !parentSha) return failed("缺少 sha 或 parentSha，无法撤销");
+
+            // 1. 验证当前分支的最新提交是否仍是我们要撤销的那个提交
+            const refUrl = `https://api.github.com/repos/${username}/${repo}/git/ref/heads/${branch}`;
+            const refRes = await fetch(refUrl, { headers });
+            if (!refRes.ok) return failed(`获取分支信息失败: ${refRes.status}`);
+            const refData = await refRes.json();
+            
+            if (refData.object.sha !== targetSha) {
+                return failed("当前分支的最新提交已被其他人修改，为了安全，禁止撤销。请去 GitHub 网页端手动处理。");
+            }
+
+            // 2. 强制把分支指针回退到 parentSha（硬重置效果）
+            const updateRefUrl = `https://api.github.com/repos/${username}/${repo}/git/refs/heads/${branch}`;
+            const updateRefRes = await fetch(updateRefUrl, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ sha: parentSha, force: true })
+            });
+            
+            if (!updateRefRes.ok) return failed(`强制回滚分支失败: ${updateRefRes.status}`);
+
+            return {
+                name: toolName, success: true,
+                data: "已成功将仓库回滚到上一次提交状态。",
+                continueConversation: false, persistToHistory: false,
+                userNotice: "已撤销提交的代码修改"
             };
         }
 

@@ -2148,7 +2148,17 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
             if (result.success) {
                 onUpdate({
                     ...msg,
-                    mediaData: { ...msg.mediaData, status: "confirmed" },
+                    mediaData: { 
+                        ...msg.mediaData, 
+                        status: "confirmed",
+                        meta: {
+                            ...meta,
+                            undoInfo: {
+                                sha: (result as any)._commitSha,
+                                parentSha: (result as any)._parentSha
+                            }
+                        }
+                    },
                     content: "代码已成功提交。"
                 });
             } else {
@@ -2195,9 +2205,57 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
 
             <div className="w-full p-3 bg-[var(--c-soft-bg)]">
                 {isConfirmed ? (
-                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-success)] font-medium">
-                        <CheckCircle2 size={16} />
-                        已提交到仓库
+                    <div className="w-full flex flex-col items-center justify-center gap-1.5 py-1">
+                        <div className="flex items-center gap-1.5 ts-13 text-[var(--c-success)] font-medium">
+                            <CheckCircle2 size={16} />
+                            已提交到仓库
+                        </div>
+                        {meta.undoInfo && meta.undoInfo.sha && (
+                            <button 
+                                onClick={async () => {
+                                    if (committing || !onUpdate) return;
+                                    setCommitting(true);
+                                    try {
+                                        const { executeToolCalls } = await import("@/lib/tool-executor");
+                                        const args = meta.undoInfo;
+                                        const results = await executeToolCalls([
+                                            { name: "UNDO_GITHUB_COMMIT", args, actor: "assistant" }
+                                        ], { sessionId: msg.sessionId });
+                                        
+                                        const result = results[0];
+                                        if (result.success) {
+                                            // 通知 AI 发生撤销
+                                            const { pushChatMessage } = await import("@/lib/chat-storage");
+                                            pushChatMessage({
+                                                sessionId: msg.sessionId,
+                                                role: "system",
+                                                content: "[系统提示：用户已撤销了上一次提交的代码修改，并强制回滚了 GitHub 仓库的分支。]"
+                                            });
+                                            
+                                            onUpdate({
+                                                ...msg,
+                                                mediaData: { ...msg.mediaData, status: "undone" },
+                                                content: "本次代码提交已被用户撤销。"
+                                            });
+                                        } else {
+                                            alert(`撤销失败: ${result.error}`);
+                                            setCommitting(false);
+                                        }
+                                    } catch (e) {
+                                        alert(`执行异常: ${e instanceof Error ? e.message : String(e)}`);
+                                        setCommitting(false);
+                                    }
+                                }}
+                                disabled={committing}
+                                className="ts-11 text-[var(--c-subtext)] hover:text-[var(--c-text)] underline underline-offset-2 transition-colors mt-0.5"
+                            >
+                                {committing ? "撤销中..." : "撤销这次提交"}
+                            </button>
+                        )}
+                    </div>
+                ) : msg.mediaData?.status === "undone" ? (
+                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-subtext)] font-medium">
+                        已撤销该提交
                     </div>
                 ) : msg.mediaData?.status === "declined" ? (
                     <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-danger)] font-medium">
