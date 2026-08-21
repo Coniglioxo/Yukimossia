@@ -2210,14 +2210,14 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                             <CheckCircle2 size={16} />
                             已提交到仓库
                         </div>
-                        {meta.undoInfo && meta.undoInfo.sha && (
+                        {(meta as any).undoInfo && (meta as any).undoInfo.sha && (
                             <button 
                                 onClick={async () => {
                                     if (committing || !onUpdate) return;
                                     setCommitting(true);
                                     try {
                                         const { executeToolCalls } = await import("@/lib/tool-executor");
-                                        const args = meta.undoInfo;
+                                        const args = (meta as any).undoInfo;
                                         const results = await executeToolCalls([
                                             { name: "UNDO_GITHUB_COMMIT", args, actor: "assistant" }
                                         ], { sessionId: msg.sessionId });
