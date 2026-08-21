@@ -148,6 +148,7 @@ const MENU_ITEMS: Array<{
   { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory },
   { section: "text", icon: IconText, label: "文字", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
   { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
+  { section: "pwa_icon" as any, icon: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="12" r="3"/></svg>, label: "桌面图标", color: BINDING_ACCENTS.api },
   { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
   { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
 ];
@@ -359,12 +360,13 @@ export function PhoneThemeApp({
                   </button>
                 ))}
                 {(() => {
-                  const iconItem = MENU_ITEMS.find(i => i.section === "pwa_icon")!;
+                  const iconItem = MENU_ITEMS.find(i => i.section === "pwa_icon" as any);
+                  if (!iconItem) return null;
                   return (
                     <button
                       className="menu-item"
                       type="button"
-                      onClick={() => setSection("pwa_icon")}
+                      onClick={() => setSection("pwa_icon" as any)}
                     >
                       <span className="card-icon" style={menuIconStyle(iconItem.color)}>
                         <iconItem.icon />
