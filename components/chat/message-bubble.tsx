@@ -2224,14 +2224,12 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                         
                                         const result = results[0];
                                         if (result.success) {
-                                            // 通知 AI 发生撤销
                                             const { pushChatMessage } = await import("@/lib/chat-storage");
                                             pushChatMessage({
                                                 sessionId: msg.sessionId,
                                                 role: "system",
                                                 content: "[系统提示：用户已撤销了上一次提交的代码修改，并强制回滚了 GitHub 仓库的分支。]"
                                             });
-                                            
                                             onUpdate({
                                                 ...msg,
                                                 mediaData: { ...msg.mediaData, status: "undone" },
@@ -2270,15 +2268,12 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                 try {
                                     const { executeToolCalls } = await import("@/lib/tool-executor");
                                     await executeToolCalls([{ name: "DISCARD_GITHUB_STAGING", args: {}, actor: "assistant" }], { sessionId: msg.sessionId });
-                                    
-                                    // 发送一条系统消息给 AI，让它知道提案被拒绝了
                                     const { pushChatMessage } = await import("@/lib/chat-storage");
                                     pushChatMessage({
                                         sessionId: msg.sessionId,
                                         role: "system",
                                         content: "[系统提示：用户已拒绝你的代码修改提案，并清空了暂存区。如果你还需要修改，请重新从头读取和编辑。]"
                                     });
-                                    
                                     onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "declined" }, content: "已拒绝该提案并清空暂存区。" });
                                 } catch (e) { alert(`操作失败: ${e}`); }
                                 setCommitting(false);
