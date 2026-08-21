@@ -2162,10 +2162,16 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                         }
                     }
                 };
-                // 这会触发底层 IndexedDB 写入并引发组件重渲染
+                // 强制更新底层数据库中的状态，防止刷新后变回未提交状态并导致能够被重复点击
+                import("@/lib/chat-storage").then(({ updateChatMessage }) => {
+                    updateChatMessage(msg.id, {
+                        mediaData: updatedMsg.mediaData,
+                        content: updatedMsg.content
+                    });
+                });
+                
                 onUpdate(updatedMsg as ChatMessage);
                 // 只有在失败时才复位 committing 状态，成功后卡片直接切换到 confirmed 状态（不再渲染确认按钮）
-                // 如果我们在这里 reset committing，由于 React 状态闭包，可能导致下一刻渲染出撤销中
             } else {
                 alert(`提交失败: ${result.error}`);
                 setCommitting(false);
