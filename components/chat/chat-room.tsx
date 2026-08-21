@@ -2927,10 +2927,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         senderName?: string;
     }) => {
         if (!content) return;
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断]"
+            : content;
         pushChatMessage({
             sessionId: session.id,
             role: "assistant",
-            content,
+            content: safeContent,
             mediaType: "tool_call",
             responseBatchId: options?.responseBatchId,
             responseRoundId: options?.responseRoundId,
@@ -2941,10 +2944,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     const persistToolNotice = (content?: string) => {
         if (!content) return;
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断]"
+            : content;
         const msg = pushChatMessage({
             sessionId: session.id,
             role: "system",
-            content,
+            content: safeContent,
             mediaType: "tool_notice",
         });
         setMessages(prev => [...prev, msg]);
