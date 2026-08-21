@@ -2164,6 +2164,8 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                 };
                 // 这会触发底层 IndexedDB 写入并引发组件重渲染
                 onUpdate(updatedMsg as ChatMessage);
+                // 只有在失败时才复位 committing 状态，成功后卡片直接切换到 confirmed 状态（不再渲染确认按钮）
+                // 如果我们在这里 reset committing，由于 React 状态闭包，可能导致下一刻渲染出撤销中
             } else {
                 alert(`提交失败: ${result.error}`);
                 setCommitting(false);
@@ -2213,11 +2215,15 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                             <CheckCircle2 size={16} />
                             已提交到仓库
                         </div>
-                        {(meta as any).undoInfo && (meta as any).undoInfo.sha && (
+                        {((meta as any).undoInfo?.sha) ? (
                             <button 
                                 onClick={async () => {
-                                    if (committing || !onUpdate) return;
-                                    setCommitting(true);
+                                    // 因为这里复用了 committing 状态，而这个按钮是在 confirmed 后才出现的
+                                    // 如果组件未卸载，committing 可能还处于 true，我们加一个专用的撤销状态
+                                    if (!onUpdate) return;
+                                    // 直接内联控制撤销状态，不复用外部的 committing，防止状态混乱
+                                    const btn = document.getElementById(`undo-btn-${msg.id}`);
+                                    if (btn) { btn.innerText = "撤销中..."; btn.setAttribute("disabled", "true"); }
                                     try {
                                         const { executeToolCalls } = await import("@/lib/tool-executor");
                                         const args = (meta as any).undoInfo;
@@ -2240,19 +2246,19 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                             });
                                         } else {
                                             alert(`撤销失败: ${result.error}`);
-                                            setCommitting(false);
+                                            if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
                                         }
                                     } catch (e) {
                                         alert(`执行异常: ${e instanceof Error ? e.message : String(e)}`);
-                                        setCommitting(false);
+                                        if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
                                     }
                                 }}
-                                disabled={committing}
+                                id={`undo-btn-${msg.id}`}
                                 className="ts-11 text-[var(--c-subtext)] hover:text-[var(--c-text)] underline underline-offset-2 transition-colors mt-0.5"
                             >
-                                {committing ? "撤销中..." : "撤销这次提交"}
+                                撤销这次提交
                             </button>
-                        )}
+                        ) : null}
                     </div>
                 ) : msg.mediaData?.status === "undone" ? (
                     <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-subtext)] font-medium">
