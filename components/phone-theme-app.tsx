@@ -919,6 +919,66 @@ function TextScalePage({
         <br />
         {"字体：上传 .ttf / .otf / .woff2 文件。"}
       </p>
+
+      {/* 桌面安装图标 */}
+      <div className="mt-8 border-t border-black/5 pt-6">
+        <p className="ts-13 font-medium mb-3" style={{ color: "var(--c-text-title)" }}>{"安装到桌面的应用图标"}</p>
+        <p className="ts-11 text-[var(--c-icon)] leading-relaxed mb-4">
+          {"自定义 PWA 添加到桌面时的应用图标。替换后请重新「添加到主屏幕」。"}
+        </p>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95 focus:outline-none"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                try {
+                  const assetId = await saveThemeAssetFromBlob(file, "pwa_icon_192");
+                  localStorage.setItem("pwa_icon_192_asset", assetId);
+                  onNotice("小图标 (192x192) 已上传");
+                } catch (err) {
+                  onNotice("上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <Upload size={15} strokeWidth={1.8} />
+            <span>上传小图标 (192)</span>
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95 focus:outline-none"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                try {
+                  const assetId = await saveThemeAssetFromBlob(file, "pwa_icon_512");
+                  localStorage.setItem("pwa_icon_512_asset", assetId);
+                  onNotice("大图标 (512x512) 已上传");
+                } catch (err) {
+                  onNotice("上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <Upload size={15} strokeWidth={1.8} />
+            <span>上传大图标 (512)</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

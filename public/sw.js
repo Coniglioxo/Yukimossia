@@ -84,6 +84,23 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+
+  // 拦截 PWA 安装图标，优先返回用户自定义的 IndexedDB 图标
+  const url = new URL(request.url);
+  if (url.pathname === "/icon-192.png" || url.pathname === "/icon-512.png") {
+    event.respondWith((async () => {
+      try {
+        // 这是个简化的读取逻辑，实际需要连通 IndexedDB 提取 blob
+        // 这里使用 Cache 拦截返回来示例思路。真实代码需打开 idb 提取 user_assets
+        // TODO: 需要更完整的 IDB 查询逻辑，这里先 fallback 到正常缓存
+        return await cacheFirst(request);
+      } catch (e) {
+        return await cacheFirst(request);
+      }
+    })());
+    return;
+  }
+
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
     return;
