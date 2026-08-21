@@ -2906,10 +2906,15 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
     const persistHiddenToolResult = (content?: string, toolExecutionId?: string) => {
         if (!content) return;
+        // 截断过于巨大的工具结果（如读取万字源码），防止 IndexedDB 膨胀导致页面加载卡死
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断，不影响 AI 实际记忆]"
+            : content;
+            
         pushChatMessage({
             sessionId: session.id,
             role: "tool",
-            content,
+            content: safeContent,
             mediaType: "tool_result",
             toolExecutionId,
         });
@@ -2988,8 +2993,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             for (const att of result.mediaAttachments || []) {
                 throwIfGenerationStopped(guard);
                 // GitHub diff preview needs special mediaData structure
+                let metaPayload = att.meta;
+                if (att.url === "github_diff_preview" && metaPayload?.args?._staging) {
+                    // 剔除巨型的 _staging 数据，避免 IndexedDB 膨胀和组件渲染卡死
+                    const { _staging, ...cleanArgs } = metaPayload.args;
+                    metaPayload = { ...metaPayload, args: cleanArgs };
+                }
                 const mediaData = att.url === "github_diff_preview"
-                    ? { title: att.title, meta: att.meta, status: "pending" }
+                    ? { title: att.title, meta: metaPayload, status: "pending" }
                     : { fileType: att.type, fileName: att.title };
                 const msg = pushChatMessage({
                     sessionId: session.id,
