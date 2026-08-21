@@ -2237,7 +2237,7 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                         if (!config) throw new Error("GitHub 配置未找到");
                                         
                                         const undoInfo = (meta as any).undoInfo;
-                                        await revertQaCommit(config, {
+                                        await qaWrite.revertQaCommit(config, {
                                             sha: undoInfo.sha,
                                             branch: undoInfo.branch || config.branch || "main",
                                             parentSha: undoInfo.parentSha,
