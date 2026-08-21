@@ -2146,21 +2146,24 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
             
             const result = results[0];
             if (result.success) {
-                onUpdate({
+                // 确保新状态的完整构建，切断与旧状态的引用关系
+                const updatedMsg = {
                     ...msg,
-                    mediaData: { 
-                        ...msg.mediaData, 
+                    content: "代码已成功提交。",
+                    mediaData: {
+                        ...msg.mediaData,
                         status: "confirmed",
                         meta: {
                             ...meta,
                             undoInfo: {
-                                sha: (result as any)._commitSha,
-                                parentSha: (result as any)._parentSha
+                                sha: (result as any)._commitSha || "",
+                                parentSha: (result as any)._parentSha || ""
                             }
                         }
-                    },
-                    content: "代码已成功提交。"
-                });
+                    }
+                };
+                // 这会触发底层 IndexedDB 写入并引发组件重渲染
+                onUpdate(updatedMsg as ChatMessage);
             } else {
                 alert(`提交失败: ${result.error}`);
                 setCommitting(false);
