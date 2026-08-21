@@ -2231,31 +2231,39 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                     const btn = document.getElementById(`undo-btn-${msg.id}`);
                                     if (btn) { btn.innerText = "撤销中..."; btn.setAttribute("disabled", "true"); }
                                     try {
-                                        const { executeToolCalls } = await import("@/lib/tool-executor");
-                                        const args = (meta as any).undoInfo;
-                                        const results = await executeToolCalls([
-                                            { name: "UNDO_GITHUB_COMMIT", args, actor: "assistant" }
-                                        ], { sessionId: msg.sessionId });
+                                        const { getQaGithubConfig } = await import("@/lib/qa-github");
+                                        const { revertQaCommit } = await import("@/lib/qa-github-write");
+                                        const config = getQaGithubConfig();
+                                        if (!config) throw new Error("GitHub 配置未找到");
                                         
-                                        const result = results[0];
-                                        if (result.success) {
-                                            const { pushChatMessage } = await import("@/lib/chat-storage");
-                                            pushChatMessage({
-                                                sessionId: msg.sessionId,
-                                                role: "system",
-                                                content: "[系统提示：用户已撤销了上一次提交的代码修改，并强制回滚了 GitHub 仓库的分支。]"
-                                            });
-                                            onUpdate({
-                                                ...msg,
-                                                mediaData: { ...msg.mediaData, status: "undone" },
-                                                content: "本次代码提交已被用户撤销。"
-                                            });
-                                        } else {
-                                            alert(`撤销失败: ${result.error}`);
-                                            if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
-                                        }
+                                        const undoInfo = (meta as any).undoInfo;
+                                        await revertQaCommit(config, {
+                                            sha: undoInfo.sha,
+                                            branch: undoInfo.branch || config.branch || "main",
+                                            parentSha: undoInfo.parentSha,
+                                            htmlUrl: "",
+                                            fileCount: 0
+                                        });
+                                        
+                                        const { pushChatMessage, updateChatMessage } = await import("@/lib/chat-storage");
+                                        pushChatMessage({
+                                            sessionId: msg.sessionId,
+                                            role: "system",
+                                            content: "[系统提示：用户已撤销了上一次提交的代码修改，并强制回滚了 GitHub 仓库的分支。]"
+                                        });
+                                        
+                                        const updatedMsg = {
+                                            ...msg,
+                                            mediaData: { ...msg.mediaData, status: "undone" },
+                                            content: "本次代码提交已被用户撤销。"
+                                        };
+                                        await updateChatMessage(msg.id, {
+                                            mediaData: updatedMsg.mediaData,
+                                            content: updatedMsg.content
+                                        });
+                                        onUpdate(updatedMsg as any);
                                     } catch (e) {
-                                        alert(`执行异常: ${e instanceof Error ? e.message : String(e)}`);
+                                        alert(`撤销异常: ${e instanceof Error ? e.message : String(e)}`);
                                         if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
                                     }
                                 }}
