@@ -2231,13 +2231,13 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                     const btn = document.getElementById(`undo-btn-${msg.id}`);
                                     if (btn) { btn.innerText = "撤销中..."; btn.setAttribute("disabled", "true"); }
                                     try {
-                                        const { getQaGithubConfig } = await import("@/lib/qa-github");
+                                        const { loadQaGithubConfig } = await import("@/lib/qa-github");
                                         const { revertQaCommit } = await import("@/lib/qa-github-write");
-                                        const config = getQaGithubConfig();
+                                        const config = loadQaGithubConfig();
                                         if (!config) throw new Error("GitHub 配置未找到");
                                         
                                         const undoInfo = (meta as any).undoInfo;
-                                        await qaWrite.revertQaCommit(config, {
+                                        await revertQaCommit(config, {
                                             sha: undoInfo.sha,
                                             branch: undoInfo.branch || config.branch || "main",
                                             parentSha: undoInfo.parentSha,
@@ -2257,11 +2257,11 @@ function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate
                                             mediaData: { ...msg.mediaData, status: "undone" },
                                             content: "本次代码提交已被用户撤销。"
                                         };
-                                        await updateChatMessage(msg.id, {
+                                        updateChatMessage(msg.id, {
                                             mediaData: updatedMsg.mediaData,
                                             content: updatedMsg.content
                                         });
-                                        onUpdate(updatedMsg as any);
+                                        setTimeout(() => onUpdate(updatedMsg as any), 10);
                                     } catch (e) {
                                         alert(`撤销异常: ${e instanceof Error ? e.message : String(e)}`);
                                         if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
