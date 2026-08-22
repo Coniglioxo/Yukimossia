@@ -2306,8 +2306,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (!(session.participantIds || []).includes(r.characterId)) continue;
             if (isGroupMuted(session, r.characterId)) continue;
             const responseBatchId = createResponseBatchId();
-            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
+            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
             const parts = stripInvalidStickerParts(rawParts, r.characterId);
+
+            if (fileSummary) {
+                const msgs = loadChatMessages(session.id);
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = msgs[i];
+                    if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                        updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                        break;
+                    }
+                }
+            }
             let attachedState = false;
             let savedAnyPart = false;
             for (const part of parts) {
@@ -4397,8 +4408,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId, stateCutoff ? { before: stateCutoff } : undefined);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(editedResponseContent, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(editedResponseContent, previousState);
         const parts = stripInvalidStickerParts(rawParts);
+
+        if (fileSummary) {
+            const msgs = loadChatMessages(session.id);
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                    updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                    break;
+                }
+            }
+        }
         const normalizedParts = normalizeEditedAssistantParts(parts);
         if (normalizedParts.length === 0 && (statusPanel || innerMonologue)) {
             normalizedParts.push({ content: "" });
