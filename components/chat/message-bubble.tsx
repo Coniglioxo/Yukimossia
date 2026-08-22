@@ -27,6 +27,7 @@ import { formatShoppingPaymentRequestHistory } from "@/lib/shopping-payment-requ
 import { toCustomAppIconId } from "@/lib/custom-app-types";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
 import { CHAT_PLUGIN_SLOTS_CHANGED_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
+import { FileCode, CheckCircle2, FileEdit, FolderPlus, GitCommit } from "lucide-react";
 
 interface MessageBubbleProps {
     msg: ChatMessage;
@@ -113,6 +114,9 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
         case "music_share":
             return <MusicShareBubble msg={msg} onPlay={onMusicPlay} />;
         case "media_file":
+            if (msg.mediaUrl === "github_diff_preview") {
+                return <GithubDiffPreviewBubble msg={msg} onUpdate={onUpdate} />;
+            }
             return <MediaFileBubble msg={msg} onUpdate={onUpdate} characterId={characterId} />;
         case "xiaohongshu_note_share":
             return <XiaohongshuShareBubble msg={msg} />;
@@ -2135,6 +2139,224 @@ function MusicShareBubble({ msg, onPlay }: { msg: ChatMessage; onPlay?: (title: 
             <div className="chat-music-share-footer">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                 <span>音乐</span>
+            </div>
+        </div>
+    );
+}
+
+// ── GitHub Diff Preview Bubble ──────────────────────────
+
+function GithubDiffPreviewBubble({ msg, onUpdate }: { msg: ChatMessage; onUpdate?: (updated: ChatMessage) => void }) {
+    const title = msg.mediaData?.title || "代码修改提案";
+    const meta = msg.mediaData?.meta as any || {};
+    const files = Array.isArray(meta.stagingInfo) ? meta.stagingInfo : [];
+    const isConfirmed = msg.mediaData?.status === "confirmed";
+    const [committing, setCommitting] = useState(false);
+
+    const handleConfirm = async () => {
+        if (isConfirmed || committing || !onUpdate) return;
+        setCommitting(true);
+        try {
+            // 从 localStorage 读取暂存区，而不是从消息历史的 meta.args._staging 读取
+            const stagingKey = `ai_phone_dev_staging_${msg.sessionId}`;
+            const rawStaging = typeof window !== "undefined" ? localStorage.getItem(stagingKey) : null;
+            let staging: Record<string, string> = {};
+            if (rawStaging) {
+                try { staging = JSON.parse(rawStaging); } catch { /* skip */ }
+            }
+            
+            if (Object.keys(staging).length === 0) {
+                alert("暂存区已清空，无法提交");
+                setCommitting(false);
+                return;
+            }
+            
+            const { executeToolCalls } = await import("@/lib/tool-executor");
+            const args = { ...(meta.args || {}), _staging: staging }; // 实时注入暂存区内容
+            const results = await executeToolCalls([
+                { name: "PUBLISH_GITHUB_COMMIT", args, actor: "assistant" }
+            ], { sessionId: msg.sessionId });
+            
+            const result = results[0];
+            if (result.success) {
+                // 确保新状态的完整构建，切断与旧状态的引用关系
+                const updatedMsg = {
+                    ...msg,
+                    content: "代码已成功提交。",
+                    mediaData: {
+                        ...msg.mediaData,
+                        status: "confirmed",
+                        meta: {
+                            ...meta,
+                            undoInfo: {
+                                sha: (result as any)._commitSha || "",
+                                parentSha: (result as any)._parentSha || ""
+                            }
+                        }
+                    }
+                };
+                // 强制更新底层数据库中的状态，防止刷新后变回未提交状态并导致能够被重复点击
+                import("@/lib/chat-storage").then(({ updateChatMessage }) => {
+                    updateChatMessage(msg.id, {
+                        mediaData: updatedMsg.mediaData,
+                        content: updatedMsg.content
+                    });
+                });
+                
+                setTimeout(() => onUpdate(updatedMsg as ChatMessage), 10);
+                // 只有在失败时才复位 committing 状态，成功后卡片直接切换到 confirmed 状态（不再渲染确认按钮）
+            } else {
+                alert(`提交失败: ${result.error}`);
+                setCommitting(false);
+            }
+        } catch (e) {
+            alert(`执行异常: ${e instanceof Error ? e.message : String(e)}`);
+            setCommitting(false);
+        }
+    };
+
+    return (
+        <div className="chat-github-diff-card flex flex-col items-center w-[280px] my-2 cursor-default select-text"
+             style={{ 
+                 background: "var(--c-glass-bg)",
+                 backdropFilter: "blur(12px)",
+                 WebkitBackdropFilter: "blur(12px)",
+                 border: "1px solid var(--c-border)",
+                 borderRadius: "16px",
+                 boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+                 overflow: "hidden"
+             }}>
+            <div className="w-full flex items-center justify-center pt-4 pb-2 text-[var(--c-text-title)]">
+                <GitCommit size={28} strokeWidth={1.5} />
+            </div>
+            <div className="w-full px-4 text-center pb-3 border-b border-[var(--c-border)]">
+                <div className="ts-15 font-semibold text-[var(--c-text-title)] leading-tight">
+                    {title.replace(/^提案:\s*/, "")}
+                </div>
+                <div className="ts-11 text-[var(--c-subtext)] mt-1.5">
+                    {files.length} 个文件被修改
+                </div>
+            </div>
+            
+            <div className="w-full px-4 py-3 flex flex-col gap-2 max-h-[140px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+                {files.map((f: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 ts-12 text-[var(--c-text)]">
+                        <FileCode size={14} className="shrink-0 opacity-60" />
+                        <span className="truncate">{f}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="w-full p-3 bg-[var(--c-soft-bg)]">
+                {isConfirmed ? (
+                    <div className="w-full flex flex-col items-center justify-center gap-1.5 py-1">
+                        <div className="flex items-center gap-1.5 ts-13 text-[var(--c-success)] font-medium">
+                            <CheckCircle2 size={16} />
+                            已提交到仓库
+                        </div>
+                        {((meta as any).undoInfo?.sha) ? (
+                            <button 
+                                onClick={async () => {
+                                    // 因为这里复用了 committing 状态，而这个按钮是在 confirmed 后才出现的
+                                    // 如果组件未卸载，committing 可能还处于 true，我们加一个专用的撤销状态
+                                    if (!onUpdate) return;
+                                    // 直接内联控制撤销状态，不复用外部的 committing，防止状态混乱
+                                    const btn = document.getElementById(`undo-btn-${msg.id}`);
+                                    if (btn) { btn.innerText = "撤销中..."; btn.setAttribute("disabled", "true"); }
+                                    try {
+                                        const { loadQaGithubConfig } = await import("@/lib/qa-github");
+                                        const { revertQaCommit } = await import("@/lib/qa-github-write");
+                                        const config = loadQaGithubConfig();
+                                        if (!config) throw new Error("GitHub 配置未找到");
+                                        
+                                        const undoInfo = (meta as any).undoInfo;
+                                        await revertQaCommit(config, {
+                                            sha: undoInfo.sha,
+                                            branch: undoInfo.branch || config.branch || "main",
+                                            parentSha: undoInfo.parentSha,
+                                            htmlUrl: "",
+                                            fileCount: 0
+                                        });
+                                        
+                                        const { pushChatMessage, updateChatMessage } = await import("@/lib/chat-storage");
+                                        pushChatMessage({
+                                            sessionId: msg.sessionId,
+                                            role: "system",
+                                            content: "[系统提示：用户已撤销了上一次提交的代码修改，并强制回滚了 GitHub 仓库的分支。]"
+                                        });
+                                        
+                                        const updatedMsg = {
+                                            ...msg,
+                                            mediaData: { ...msg.mediaData, status: "undone" },
+                                            content: "本次代码提交已被用户撤销。"
+                                        };
+                                        updateChatMessage(msg.id, {
+                                            mediaData: updatedMsg.mediaData,
+                                            content: updatedMsg.content
+                                        });
+                                        setTimeout(() => onUpdate(updatedMsg as any), 10);
+                                    } catch (e) {
+                                        alert(`撤销异常: ${e instanceof Error ? e.message : String(e)}`);
+                                        if (btn) { btn.innerText = "撤销这次提交"; btn.removeAttribute("disabled"); }
+                                    }
+                                }}
+                                id={`undo-btn-${msg.id}`}
+                                className="ts-11 text-[var(--c-subtext)] hover:text-[var(--c-text)] underline underline-offset-2 transition-colors mt-0.5"
+                            >
+                                撤销这次提交
+                            </button>
+                        ) : null}
+                    </div>
+                ) : msg.mediaData?.status === "undone" ? (
+                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-subtext)] font-medium">
+                        已撤销该提交
+                    </div>
+                ) : msg.mediaData?.status === "declined" ? (
+                    <div className="w-full flex items-center justify-center gap-1.5 py-2 ts-13 text-[var(--c-danger)] font-medium">
+                        已拒绝并清空暂存区
+                    </div>
+                ) : (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={async () => {
+                                if (committing || !onUpdate) return;
+                                setCommitting(true);
+                                try {
+                                    const { executeToolCalls } = await import("@/lib/tool-executor");
+                                    await executeToolCalls([{ name: "DISCARD_GITHUB_STAGING", args: {}, actor: "assistant" }], { sessionId: msg.sessionId });
+                                    const { pushChatMessage } = await import("@/lib/chat-storage");
+                                    pushChatMessage({
+                                        sessionId: msg.sessionId,
+                                        role: "system",
+                                        content: "[系统提示：用户已拒绝你的代码修改提案，并清空了暂存区。如果你还需要修改，请重新从头读取和编辑。]"
+                                    });
+                                    setTimeout(() => onUpdate({ ...msg, mediaData: { ...msg.mediaData, status: "declined" }, content: "已拒绝该提案并清空暂存区。" }), 10);
+                                } catch (e) { alert(`操作失败: ${e}`); }
+                                setCommitting(false);
+                            }}
+                            disabled={committing}
+                            className="flex-1 ui-btn ui-btn-ghost rounded-xl py-2"
+                            style={{ borderRadius: "10px" }}
+                        >
+                            拒绝
+                        </button>
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={committing}
+                            className="flex-[2] ui-btn ui-btn-primary rounded-xl py-2 flex items-center justify-center gap-1.5"
+                            style={{ borderRadius: "10px" }}
+                        >
+                            {committing ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                                </svg>
+                            ) : (
+                                <FileEdit size={15} />
+                            )}
+                            {committing ? "提交中..." : "确认并提交"}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

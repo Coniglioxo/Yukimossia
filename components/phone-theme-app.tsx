@@ -145,15 +145,16 @@ const MENU_ITEMS: Array<{
   color?: string;
   glow?: string;
 }> = [
-  { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)`, glass: "palette" },
-  { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)`, glass: "wallpaper" },
-  { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)`, glass: "icons" },
-  { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)`, glass: "widgets" },
-  { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory, glass: "status-bar" },
-  { section: "text", icon: IconText, label: "文字", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)`, glass: "text" },
-  { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)`, glass: "css" },
-  { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)`, glass: "theme-transfer" },
-  { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)`, glass: "theme-reset" },
+  { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
+  { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
+  { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)` },
+  { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)` },
+  { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory },
+  { section: "text", icon: IconText, label: "文字", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
+  { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
+  { section: "pwa_icon" as any, icon: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="12" r="3"/></svg>, label: "桌面图标", color: BINDING_ACCENTS.api },
+  { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
+  { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
 ];
 
 const menuIconStyle = (color?: string): CSSProperties => ({
@@ -362,6 +363,25 @@ export function PhoneThemeApp({
                     </span>
                   </button>
                 ))}
+                {(() => {
+                  const iconItem = MENU_ITEMS.find(i => i.section === "pwa_icon" as any);
+                  if (!iconItem) return null;
+                  return (
+                    <button
+                      className="menu-item"
+                      type="button"
+                      onClick={() => setSection("pwa_icon" as any)}
+                    >
+                      <span className="card-icon" style={menuIconStyle(iconItem.color)}>
+                        <iconItem.icon />
+                      </span>
+                      <span className="menu-label appearance-menu-item-label">{iconItem.label}</span>
+                      <span className="menu-right">
+                        <IconChevronRight />
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
@@ -440,6 +460,8 @@ export function PhoneThemeApp({
           <GlobalCSSPage draft={draft} onDraftChange={onDraftChange} onApply={onApply} onNotice={onNotice} />
         ) : section === "icons" ? (
           <IconSkinPage draft={draft} onDraftChange={onDraftChange} onApply={onApply} onNotice={onNotice} />
+        ) : section === "pwa_icon" ? (
+          <PWAIconPage onNotice={onNotice} />
         ) : (
           <div className="flex-1 overflow-y-auto items-start justify-center flex">
             <p className="ts-14 text-[var(--c-icon)]">{"\u300C"}{SECTION_TITLES[section]}{"\u300D\u529F\u80FD\u5F00\u53D1\u4E2D\u2026"}</p>
@@ -923,6 +945,66 @@ function TextScalePage({
         <br />
         {"字体：上传 .ttf / .otf / .woff2 文件。"}
       </p>
+
+      {/* 桌面安装图标 */}
+      <div className="mt-8 border-t border-black/5 pt-6">
+        <p className="ts-13 font-medium mb-3" style={{ color: "var(--c-text-title)" }}>{"安装到桌面的应用图标"}</p>
+        <p className="ts-11 text-[var(--c-icon)] leading-relaxed mb-4">
+          {"自定义 PWA 添加到桌面时的应用图标。替换后请重新「添加到主屏幕」。"}
+        </p>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95 focus:outline-none"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                try {
+                  const assetId = await saveThemeAssetFromBlob(file, "pwa_icon_192");
+                  localStorage.setItem("pwa_icon_192_asset", assetId);
+                  onNotice("小图标 (192x192) 已上传");
+                } catch (err) {
+                  onNotice("上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <Upload size={15} strokeWidth={1.8} />
+            <span>上传小图标 (192)</span>
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95 focus:outline-none"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                try {
+                  const assetId = await saveThemeAssetFromBlob(file, "pwa_icon_512");
+                  localStorage.setItem("pwa_icon_512_asset", assetId);
+                  onNotice("大图标 (512x512) 已上传");
+                } catch (err) {
+                  onNotice("上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <Upload size={15} strokeWidth={1.8} />
+            <span>上传大图标 (512)</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1224,8 +1306,8 @@ function IconSkinPage({
         </button>
       )}
 
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-      <input ref={dockFileRef} type="file" accept="image/*" className="hidden" onChange={handleDockUpload} />
+      <input ref={fileRef} type="file" accept="*" className="hidden" onChange={handleUpload} />
+      <input ref={dockFileRef} type="file" accept="*" className="hidden" onChange={handleDockUpload} />
 
       {confirmDeleteId && (
         <ConfirmDialog
@@ -1427,7 +1509,7 @@ function WallpaperPage({
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept="*"
         className="hidden"
         onChange={handleUpload}
       />
@@ -1565,6 +1647,67 @@ function WallpaperPage({
           onCancel={handleDeleteCancel}
         />
       )}
+    </div>
+  );
+}
+
+function PWAIconPage({ onNotice }: { onNotice: (text: string) => void }) {
+  return (
+    <div className="theme-section-page p-4" style={{ gap: 14 }}>
+      <div className="g-card p-4">
+        <p className="ts-13 font-medium mb-3" style={{ color: "var(--c-text-title)" }}>{"安装到桌面的应用图标"}</p>
+        <p className="ts-11 text-[var(--c-icon)] leading-relaxed mb-4">
+          {"自定义 PWA 添加到桌面时的应用图标。替换后请在浏览器中重新选择「添加到主屏幕」。\n(提示：需要同时上传 192x192 和 512x512 两张图片。)"}
+        </p>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              // 这里故意去掉了 accept="image/*"，让它能调起 iOS 的文件系统
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                try {
+                  const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                  await saveThemeAssetFromBlob(file, "wallpaper", "pwa_icon_192");
+                  onNotice("小图标 (192x192) 已上传");
+                } catch (err) {
+                  onNotice("小图标上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <span>上传小图标 (192x192)</span>
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-[var(--c-page-body-bg)] px-4 text-xs font-bold text-[var(--c-text-title)] shadow-sm transition-all hover:bg-black/5 active:scale-95"
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              // 去掉 accept="image/*" 调起文件管理器
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                try {
+                  const { saveThemeAssetFromBlob } = await import("@/lib/theme-storage");
+                  await saveThemeAssetFromBlob(file, "wallpaper", "pwa_icon_512");
+                  onNotice("大图标 (512x512) 已上传");
+                } catch (err) {
+                  onNotice("大图标上传失败");
+                }
+              };
+              input.click();
+            }}
+          >
+            <span>上传大图标 (512x512)</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

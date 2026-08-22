@@ -84,6 +84,58 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+
+  const url = new URL(request.url);
+
+  // 终极杀招：直接拦截 manifest 请求，把 base64 强行注入进去！
+  if (url.pathname.includes("manifest")) {
+    event.respondWith((async () => {
+      try {
+        const res = await fetch(request);
+        const manifest = await res.json();
+
+        const dbName = "ai_phone_theme_db_v1";
+        const storeName = "assets";
+        const db = await new Promise((resolve, reject) => {
+          const req = indexedDB.open(dbName);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        
+        const getRecord = (id) => new Promise((resolve) => {
+          const req = store.get(id);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+
+        const icon192 = await getRecord("pwa_icon_192");
+        const icon512 = await getRecord("pwa_icon_512");
+
+        if (manifest.icons && Array.isArray(manifest.icons)) {
+          if (icon192 && icon192.dataUrl) {
+            const i192 = manifest.icons.find(i => i.sizes === "192x192");
+            if (i192) i192.src = icon192.dataUrl;
+          }
+          if (icon512 && icon512.dataUrl) {
+            const i512 = manifest.icons.find(i => i.sizes === "512x512");
+            if (i512) i512.src = icon512.dataUrl;
+          }
+        }
+
+        return new Response(JSON.stringify(manifest), { 
+          headers: { "Content-Type": "application/manifest+json; charset=utf-8" }
+        });
+      } catch (err) {
+        console.error("Manifest intercept error:", err);
+        return fetch(request);
+      }
+    })());
+    return;
+  }
+
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
     return;

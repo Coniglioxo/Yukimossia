@@ -10,6 +10,7 @@ import {
     findEnabledInternalSubToolDefinition,
     getEnabledInternalCapabilities,
     getInternalCapabilityToolDefinition,
+    getInternalCapability,
 } from "./internal-capability-storage";
 import { loadCustomAppToolsForContext, type RegisteredCustomAppExtension } from "./custom-app-sdk-registry";
 import type { CustomAppToolDefinition } from "./custom-app-types";
@@ -360,7 +361,7 @@ export type EnabledTool = {
     mcpTools?: McpDiscoveredTool[];
 };
 
-export function getEnabledTools(appId?: string): EnabledTool[] {
+export function getEnabledTools(appId?: string, injectDeveloperCapability: boolean = false): EnabledTool[] {
     const tools: EnabledTool[] = [];
 
     const restTools = loadRestTools();
@@ -435,7 +436,13 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
         });
     }
 
-    for (const capability of getEnabledInternalCapabilities(appId)) {
+    const capabilities = getEnabledInternalCapabilities(appId);
+    if (injectDeveloperCapability) {
+        const devCapability = getInternalCapability("github_developer");
+        if (devCapability) capabilities.push({ ...devCapability, enabled: true });
+    }
+
+    for (const capability of capabilities) {
         const tool = getInternalCapabilityToolDefinition(capability);
         if (!tool) continue;
         tools.push({
@@ -486,8 +493,8 @@ export function getEnabledTools(appId?: string): EnabledTool[] {
     return tools;
 }
 
-export function findEnabledToolForSchema(name: string, appId?: string, macroContext?: ToolNameMacroContext): EnabledTool | undefined {
-    const direct = getEnabledTools(appId).find(t => toolNameMatches(t.name, name, macroContext));
+export function findEnabledToolForSchema(name: string, appId?: string, macroContext?: ToolNameMacroContext, injectDeveloperCapability: boolean = false): EnabledTool | undefined {
+    const direct = getEnabledTools(appId, injectDeveloperCapability).find(t => toolNameMatches(t.name, name, macroContext));
     if (direct) return direct;
 
     const compositePackages = loadCompositeToolPackages().filter(pkg => pkg.enabled);
@@ -518,7 +525,7 @@ export function findEnabledToolForSchema(name: string, appId?: string, macroCont
         };
     }
 
-    const internalSubTool = findEnabledInternalSubToolDefinition(name, appId);
+    const internalSubTool = findEnabledInternalSubToolDefinition(name, appId, true);
     if (internalSubTool) {
         return {
             name: internalSubTool.tool.name,

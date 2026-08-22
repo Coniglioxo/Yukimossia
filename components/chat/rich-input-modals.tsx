@@ -536,3 +536,64 @@ export function VoiceRecordModal({ characterId, onSend, onClose }: VoiceRecordMo
         </div>
     );
 }
+
+// ── Text File Input Modal ─────────────────────────────
+
+export interface ChatTextFileSelection {
+    file: File;
+    text: string;
+}
+
+interface TextFileInputModalProps {
+    onSend: (selection: ChatTextFileSelection) => void;
+    onClose: () => void;
+}
+
+const CHAT_FILE_MAX_BYTES = 1024 * 1024;
+
+export function TextFileInputModal({ onSend, onClose }: TextFileInputModalProps) {
+    const [selection, setSelection] = useState<ChatTextFileSelection | null>(null);
+    const [error, setError] = useState("");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        setError("");
+        if (file.size > CHAT_FILE_MAX_BYTES) {
+            setSelection(null);
+            setError("文件不能超过 1 MB");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => setSelection({ file, text: String(reader.result || "") });
+        reader.onerror = () => setError("文件读取失败");
+        reader.readAsText(file);
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div onClick={event => event.stopPropagation()} className="modal-dialog">
+                <div className="ts-16 font-semibold text-center text-[var(--c-text)]">发送文件</div>
+                <button
+                    type="button"
+                    className="w-full min-h-[120px] rounded-xl flex flex-col items-center justify-center gap-2 ui-placeholder-gradient cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--c-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" />
+                    </svg>
+                    <span className="ts-12 text-[var(--c-icon)]">选择文本文件</span>
+                </button>
+                <input ref={fileInputRef} type="file" accept=".txt,.md,.json,.yaml,.yml,.xml,.csv,.log,.html,.css,.js,.ts" className="hidden" onChange={handleFileChange} />
+                {selection && <div className="menu-desc !mt-0 break-all">{selection.file.name} · {(selection.file.size / 1024).toFixed(1)} KB</div>}
+                {error && <div className="menu-desc !mt-0 text-[var(--c-danger)]">{error}</div>}
+                <div className="flex gap-3 w-full">
+                    <button onClick={onClose} className="ui-btn ui-btn-ghost ui-btn-bordered-ghost flex-1">取消</button>
+                    <button onClick={() => selection && onSend(selection)} disabled={!selection} className="ui-btn ui-btn-success flex-1">发送</button>
+                </div>
+            </div>
+        </div>
+    );
+}

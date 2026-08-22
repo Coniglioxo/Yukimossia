@@ -776,8 +776,10 @@ async function executeInternalTool(call: ToolCall, context?: ToolExecutionContex
     if (isCalendarToolName(call.name)) return executeCalendarTool(call, context);
     if (isLocalDataToolName(call.name)) return executeLocalDataTool(call);
     if (isToolboxManagementToolName(call.name)) return executeToolboxManagementTool(call);
+    if (isGithubDeveloperToolName(call.name)) return executeGithubDeveloperTool(call, context);
     if (call.name === "发送文件") return executeSendFileTool(call);
     if (call.name === "角色电脑") return executeAgentComputerTool(call, context);
+    if (call.name === "读取聊天文件") return executeReadHistoryFileTool(call, context);
     if (call.name === "稍后主动联系" || call.name === "设置定时醒来") return executeTimedWakeTool(call, context);
 
     if (call.name !== "写入记忆") return null;
@@ -846,6 +848,15 @@ function isToolboxManagementToolName(name: string): boolean {
         || name === "更新组合工具"
         || name === "设置组合工具启用"
         || name === "删除组合工具";
+}
+
+function isGithubDeveloperToolName(name: string): boolean {
+    return name === "READ_GITHUB_FILE"
+        || name === "LIST_GITHUB_DIR"
+        || name === "WRITE_GITHUB_FILE"
+        || name === "EDIT_GITHUB_FILE"
+        || name === "PUBLISH_GITHUB_COMMIT"
+        || name === "DISCARD_GITHUB_STAGING";
 }
 
 const MAX_LOCAL_DATA_RESULT_LENGTH = 12000;
@@ -2062,6 +2073,348 @@ async function executeAgentComputerTool(call: ToolCall, context?: ToolExecutionC
 }
 
 // ── Send File Tool ───────────────────────────────
+
+async function executeReadHistoryFileTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
+    const args = call.args || {};
+    const messageId = typeof args.messageId === "string" ? args.messageId.trim() : "";
+    if (!messageId) return { name: call.name, success: false, error: "缺少 messageId 参数", continueConversation: false };
+    
+    if (!context?.sessionId) return { name: call.name, success: false, error: "无法获取当前会话 ID", continueConversation: false };
+    
+    const { loadChatMessages } = await import("./chat-storage");
+    const msgs = loadChatMessages(context.sessionId);
+    const msg = msgs.find(m => m.id === messageId);
+    if (!msg) return { name: call.name, success: false, error: "未找到该 ID 的消息", continueConversation: false };
+    if (msg.mediaType !== "media_file" || msg.mediaData?.fileType !== "file" || !msg.mediaUrl) {
+        return { name: call.name, success: false, error: "该消息不是文本文件", continueConversation: false };
+    }
+    
+    try {
+        const stored = await loadMediaBlob(msg.mediaUrl);
+        if (!stored) return { name: call.name, success: false, error: "文件内容已过期或不可用", continueConversation: false };
+        const rawText = await stored.blob.text();
+        return {
+            name: call.name,
+            success: true,
+            data: `文件 ${msg.mediaData?.fileName || ""} 的完整内容：\n${rawText}`,
+            continueConversation: true,
+            persistToHistory: false,
+            userNotice: "读取了历史文件",
+        };
+    } catch (e) {
+        return {
+            name: call.name,
+            success: false,
+            error: `读取失败: ${e instanceof Error ? e.message : String(e)}`,
+            continueConversation: false
+        };
+    }
+}
+
+// 内存级缓存，解决同轮多次调用时的并发竞态问题
+const githubStagingMemoryCache = new Map<string, Record<string, string>>();
+
+async function executeGithubDeveloperTool(call: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
+    const args = call.args || {};
+    const toolName = call.name;
+
+    const failed = (msg: string): ToolResult => ({
+        name: toolName, success: false, error: msg, continueConversation: true, persistToHistory: false
+    });
+
+    if (!context?.sessionId) return failed("缺少会话信息");
+    const { loadChatSessions } = await import("./chat-storage");
+    const session = loadChatSessions().find(s => s.id === context.sessionId);
+    if (!session || !session.developerModeEnabled) return failed("未开启开发者权限");
+
+    const username = session.developerGithubUsername?.trim();
+    const repo = session.developerGithubRepo?.trim();
+    const pat = session.developerGithubPat?.trim();
+    const branch = session.developerGithubBranch?.trim() || "main";
+    if (!username || !repo || !pat) return failed("请先在配置中填写 GitHub 用户名、仓库名和 PAT");
+
+    const headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": `Bearer ${pat}`
+    };
+
+    try {
+        if (toolName === "LIST_GITHUB_DIR") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) return failed(`API 请求失败: ${res.status}`);
+            const data = await res.json();
+            if (!Array.isArray(data)) return failed("该路径不是一个目录");
+            const listing = data.map(item => `${item.type === "dir" ? "[目录]" : "[文件]"} ${item.path}`).join("\n");
+            return {
+                name: toolName, success: true, data: `目录 ${path || "/"} 内容：\n${listing}`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        // 本地读取暂存区数据，优先使用内存缓存解决同轮并发竞态问题
+        const stagingKey = `ai_phone_dev_staging_${context.sessionId}`;
+        let staging: Record<string, string> = githubStagingMemoryCache.get(stagingKey) || {};
+        if (!githubStagingMemoryCache.has(stagingKey) && typeof window !== "undefined") {
+            const raw = localStorage.getItem(stagingKey);
+            if (raw) try { staging = JSON.parse(raw); } catch { /* skip */ }
+            githubStagingMemoryCache.set(stagingKey, staging);
+        }
+
+        if (toolName === "READ_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            if (!path) return failed("缺少 path");
+            
+            let content = "";
+            let isFromStaging = false;
+            
+            // 优先从暂存区读取，让 AI 能看到自己刚修改过的内容
+            if (staging[path] !== undefined) {
+                content = staging[path];
+                isFromStaging = true;
+            } else {
+                const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+                const res = await fetch(url, { headers });
+                if (!res.ok) return failed(`读取失败 (可能文件不存在): ${res.status}`);
+                const data = await res.json();
+                if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
+                content = decodeURIComponent(escape(atob(data.content)));
+            }
+            
+            let lines = content.split("\n");
+            const totalLines = lines.length;
+            const startLine = typeof args.startLine === "number" ? Math.max(1, args.startLine) : 1;
+            const endLine = typeof args.endLine === "number" ? Math.min(totalLines, args.endLine) : totalLines;
+            
+            if (startLine > 1 || endLine < totalLines) {
+                lines = lines.slice(startLine - 1, endLine);
+            }
+            
+            const sourceLabel = isFromStaging ? " (⚠️暂存区最新未提交版本)" : "";
+            return {
+                name: toolName, success: true,
+                data: `文件 ${path}${sourceLabel} (总 ${totalLines} 行)${startLine > 1 || endLine < totalLines ? ` (显示 ${startLine}-${endLine} 行)` : ""}：\n${lines.join("\n")}`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "WRITE_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const content = typeof args.content === "string" ? args.content : "";
+            if (!path) return failed("缺少 path");
+            
+            staging[path] = content;
+            githubStagingMemoryCache.set(stagingKey, staging);
+            if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
+
+            return {
+                name: toolName, success: true,
+                data: `已将 ${path} 的全量修改写入暂存区。请继续改其他文件，或使用 PUBLISH_GITHUB_COMMIT 提交。`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "EDIT_GITHUB_FILE") {
+            const path = (typeof args.path === "string" ? args.path.trim() : "").replace(/^\//, "");
+            const findStr = typeof args.find === "string" ? args.find : "";
+            const replaceStr = typeof args.replace === "string" ? args.replace : "";
+            const replaceAll = args.all === true;
+            if (!path || !findStr) return failed("缺少 path 或 find");
+
+            // 如果暂存区没有该文件，先从 GitHub 拉取原文
+            let currentContent = staging[path];
+            if (currentContent === undefined) {
+                const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}?ref=${branch}`;
+                const res = await fetch(url, { headers });
+                if (!res.ok) return failed(`拉取原文失败 (可能文件不存在): ${res.status}`);
+                const data = await res.json();
+                if (data.type !== "file" || !data.content) return failed("该路径不是一个可读文件");
+                currentContent = decodeURIComponent(escape(atob(data.content)));
+            }
+
+            if (!currentContent.includes(findStr)) {
+                return failed("替换失败：原文中未找到指定的 find 片段，请核对是否完全一致。");
+            }
+
+            if (replaceAll) {
+                currentContent = currentContent.split(findStr).join(replaceStr);
+            } else {
+                const count = currentContent.split(findStr).length - 1;
+                if (count > 1) return failed(`替换失败：原文中找到了 ${count} 处匹配片段，不唯一。如果想全替换请使用 all:true，否则请提供更长、更唯一的上下文片段。`);
+                currentContent = currentContent.replace(findStr, replaceStr);
+            }
+
+            staging[path] = currentContent;
+            githubStagingMemoryCache.set(stagingKey, staging);
+            if (typeof window !== "undefined") localStorage.setItem(stagingKey, JSON.stringify(staging));
+
+            return {
+                name: toolName, success: true,
+                data: `已成功编辑 ${path} 并放入暂存区。请继续操作，或使用 PUBLISH_GITHUB_COMMIT 提交。`,
+                continueConversation: true, persistToHistory: false
+            };
+        }
+
+        if (toolName === "DISCARD_GITHUB_STAGING") {
+            githubStagingMemoryCache.delete(stagingKey);
+            if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
+            return {
+                name: toolName, success: true,
+                data: "暂存区已清空，所有未提交的修改已放弃。",
+                continueConversation: true, persistToHistory: false,
+                userNotice: "已清空代码修改暂存区"
+            };
+        }
+
+        if (toolName === "PUBLISH_GITHUB_COMMIT") {
+            const message = typeof args.message === "string" ? args.message.trim() || "Update via AI Phone" : "Update via AI Phone";
+            if (args._staging && typeof args._staging === "object") {
+                staging = args._staging as Record<string, string>;
+            }
+            const filesToCommit = Object.keys(staging);
+            if (filesToCommit.length === 0) return failed("暂存区为空，没有需要提交的文件");
+
+            // 拦截确认模式
+            const commitMode = session.developerCommitMode || "confirm";
+            if (commitMode === "confirm" && !args._confirmed) {
+                return {
+                    name: toolName,
+                    success: true,
+                    data: "等待用户确认代码修改...",
+                    continueConversation: false, // 停下来等用户点
+                    persistToHistory: true,
+                    userNotice: "提交了代码修改提案",
+                    mediaAttachments: [{
+                        type: "file",
+                        url: "github_diff_preview",
+                        title: `提案: ${message}`,
+                        meta: { 
+                            action: "github_commit_proposal", 
+                            args: { message, _confirmed: true }, // 只传 message，不传巨型 _staging 对象
+                            stagingInfo: Object.keys(staging) // 传给 UI 用的文件列表
+                        }
+                    }]
+                };
+            }
+
+            // 确认提交，执行 GitHub Tree API 提交流程
+            // 1. 获取基础树
+            const refUrl = `https://api.github.com/repos/${username}/${repo}/git/ref/heads/${branch}`;
+            const refRes = await fetch(refUrl, { headers });
+            if (!refRes.ok) return failed(`获取分支信息失败: ${refRes.status}`);
+            const refData = await refRes.json();
+            const baseCommitSha = refData.object.sha;
+
+            const commitUrl = `https://api.github.com/repos/${username}/${repo}/git/commits/${baseCommitSha}`;
+            const commitRes = await fetch(commitUrl, { headers });
+            const commitData = await commitRes.json();
+            const baseTreeSha = commitData.tree.sha;
+
+            // 2. 为每个文件创建 blob
+            const treeItems = [];
+            for (const path of filesToCommit) {
+                const content = staging[path];
+                const blobRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/blobs`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({ content, encoding: "utf-8" })
+                });
+                if (!blobRes.ok) return failed(`创建 blob 失败 (${path}): ${blobRes.status}`);
+                const blobData = await blobRes.json();
+                treeItems.push({
+                    path,
+                    mode: "100644",
+                    type: "blob",
+                    sha: blobData.sha
+                });
+            }
+
+            // 3. 创建新树
+            const treeRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/trees`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+            });
+            if (!treeRes.ok) return failed(`创建新树失败: ${treeRes.status}`);
+            const treeData = await treeRes.json();
+
+            // 4. 创建提交
+            const newCommitRes = await fetch(`https://api.github.com/repos/${username}/${repo}/git/commits`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    message,
+                    tree: treeData.sha,
+                    parents: [baseCommitSha]
+                })
+            });
+            if (!newCommitRes.ok) return failed(`创建提交失败: ${newCommitRes.status}`);
+            const newCommitData = await newCommitRes.json();
+
+            // 5. 更新引用
+            // 注意：GitHub API 获取用 /git/ref/，但更新必须用 /git/refs/（复数）
+            const updateRefUrl = `https://api.github.com/repos/${username}/${repo}/git/refs/heads/${branch}`;
+            const updateRefRes = await fetch(updateRefUrl, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ sha: newCommitData.sha })
+            });
+            if (!updateRefRes.ok) return failed(`更新分支失败: ${updateRefRes.status}`);
+
+            // 提交成功，清空暂存区
+            githubStagingMemoryCache.delete(stagingKey);
+            if (typeof window !== "undefined") localStorage.removeItem(stagingKey);
+
+            return {
+                name: toolName, success: true,
+                data: `成功修改了 ${filesToCommit.length} 个文件并提交到 GitHub。`,
+                continueConversation: true, persistToHistory: false,
+                userNotice: `已向 GitHub 提交 ${filesToCommit.length} 个文件的修改提案`,
+                // 返回 sha 供前端缓存用于撤销
+                _commitSha: newCommitData.sha,
+                _parentSha: baseCommitSha
+            };
+        }
+
+        if (toolName === "UNDO_GITHUB_COMMIT") {
+            const targetSha = args.sha;
+            const parentSha = args.parentSha;
+            if (!targetSha || !parentSha) return failed("缺少 sha 或 parentSha，无法撤销");
+
+            // 1. 验证当前分支的最新提交是否仍是我们要撤销的那个提交
+            const refUrl = `https://api.github.com/repos/${username}/${repo}/git/ref/heads/${branch}`;
+            const refRes = await fetch(refUrl, { headers });
+            if (!refRes.ok) return failed(`获取分支信息失败: ${refRes.status}`);
+            const refData = await refRes.json();
+            
+            if (refData.object.sha !== targetSha) {
+                return failed("当前分支的最新提交已被其他人修改，为了安全，禁止撤销。请去 GitHub 网页端手动处理。");
+            }
+
+            // 2. 强制把分支指针回退到 parentSha（硬重置效果）
+            const updateRefUrl = `https://api.github.com/repos/${username}/${repo}/git/refs/heads/${branch}`;
+            const updateRefRes = await fetch(updateRefUrl, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ sha: parentSha, force: true })
+            });
+            
+            if (!updateRefRes.ok) return failed(`强制回滚分支失败: ${updateRefRes.status}`);
+
+            return {
+                name: toolName, success: true,
+                data: "已成功将仓库回滚到上一次提交状态。",
+                continueConversation: false, persistToHistory: false,
+                userNotice: "已撤销提交的代码修改"
+            };
+        }
+
+        return failed("未知的 GitHub 开发者工具名");
+    } catch (err) {
+        return failed(`执行出错: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
 
 async function executeSendFileTool(call: ToolCall): Promise<ToolResult> {
     const capability = getInternalCapability(SEND_FILE_CAPABILITY_ID);

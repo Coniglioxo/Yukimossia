@@ -1012,7 +1012,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
                 <input
                   ref={imageInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="*"
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => handlePickImages(e.target.files)}

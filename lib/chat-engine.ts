@@ -75,15 +75,6 @@ import { kvGet, kvSet, kvRemove, registerKvMigration } from "./kv-db";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import { getInternalCapability, getInternalCapabilitySubToolDefinitions } from "./internal-capability-storage";
 import { isMediaStoreRef, loadMediaBlob } from "./media-cache-storage";
-import {
-    DEFAULT_CHAT_BILINGUAL_PROMPT,
-    DEFAULT_GROUP_CHAT_BILINGUAL_PROMPT,
-    DEFAULT_GROUP_OFFLINE_CHAT_BILINGUAL_PROMPT,
-    DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT,
-    resolveBilingualPrompt,
-} from "./bilingual-prompt-defaults";
-import { parseOfflineResponse, type ParsedOfflineResponse } from "./chat-offline-storage";
-import { throwIfAborted } from "./abort-utils";
 
 const CHAT_FILE_PROMPT_MAX_CHARS = 120_000;
 
@@ -130,6 +121,16 @@ async function attachUserTextFilesToHistory(history: ChatMessage[]): Promise<Cha
         }
     }));
 }
+
+import {
+    DEFAULT_CHAT_BILINGUAL_PROMPT,
+    DEFAULT_GROUP_CHAT_BILINGUAL_PROMPT,
+    DEFAULT_GROUP_OFFLINE_CHAT_BILINGUAL_PROMPT,
+    DEFAULT_OFFLINE_CHAT_BILINGUAL_PROMPT,
+    resolveBilingualPrompt,
+} from "./bilingual-prompt-defaults";
+import { parseOfflineResponse, type ParsedOfflineResponse } from "./chat-offline-storage";
+import { throwIfAborted } from "./abort-utils";
 
 export class ChatEngineError extends Error {
     constructor(message: string) {
@@ -1811,6 +1812,7 @@ export async function buildChatPromptMessages(
     userIdentity: ReturnType<typeof resolveUserIdentity>;
     toolsEnabled: boolean;
 }> {
+    const historyWithTextFiles = await attachUserTextFilesToHistory(history);
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
     if (!character) throw new ChatEngineError(`Character not found: ${session.contactId}`);
@@ -1851,7 +1853,7 @@ export async function buildChatPromptMessages(
     const attachedImages = config.enableImageRecognition === true ? options?.attachedImages : undefined;
     const historyForPrompt: ChatMessage[] = attachedImages?.length
         ? [
-            ...history,
+            ...historyWithTextFiles,
             ...attachedImages.map((imageUrl, index): ChatMessage => ({
                 id: `video-frame-${Date.now()}-${index}`,
                 sessionId: session.id,
@@ -1864,7 +1866,7 @@ export async function buildChatPromptMessages(
                 mediaData: { label: "视频通话当前画面" },
             })),
         ]
-        : history;
+        : historyWithTextFiles;
 
     const now = new Date();
     const promptTimeContext = buildCharacterTimeContext(character.timeZone, now);
@@ -1873,7 +1875,7 @@ export async function buildChatPromptMessages(
     const isOfflineMode = options?.appTags?.includes("offline") === true;
     const effectiveAppTags = mergeAppTags(options?.appTags, promptProfile?.appTags, resolvedAppId);
     const toolsAllowed = options?.toolsAllowed !== false && !isOfflineMode;
-    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId) : [];
+    const enabledTools = toolsAllowed ? getEnabledTools(resolvedAppId, session.developerModeEnabled === true) : [];
     const toolsEnabled = enabledTools.length > 0
         && (options?.forceEnableTools === true || presetIncludesToolsMacro(preset, resolvedAppId, effectiveAppTags));
     const usesNativeActions = Boolean(toolsEnabled && nativeToolProtocolForConfig(config));
@@ -2077,7 +2079,7 @@ async function generateNativeChatCompletion(
     },
 ): Promise<ChatCompletionResult> {
     const { session, llmMessages, character, config, preset, regexes, userIdentity, options, callbacks } = params;
-    const enabledTools = getEnabledTools(options?.appId ?? "chat");
+    const enabledTools = getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
     const persistedSession = loadChatSessions().find(item => item.id === session.id);
     let expandedSourceIds = normalizeNativeExpandedToolSourceIds(
@@ -2321,7 +2323,7 @@ export async function generateChatCompletion(
     const { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, historyWithTextFiles, options);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
 
-    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat").length > 0) {
+    if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true).length > 0) {
         return generateNativeChatCompletion({
             session,
             llmMessages,
@@ -2417,7 +2419,7 @@ export async function generateChatCompletion(
                 const tool = findEnabledToolForSchema(fetch.name, options?.appId ?? "chat", {
                     characterName: character.name,
                     userName: userIdentity?.name ?? "用户",
-                });
+                }, session.developerModeEnabled === true);
                 const schemaContent = tool
                     ? formatToolSchema(tool, {
                         characterName: character.name,
@@ -2663,7 +2665,7 @@ export async function previewPromptRequestSnapshot(
 
     const { llmMessages, character, config, preset, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, effectiveHistory, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
-    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat") : [];
+    const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat", session.developerModeEnabled === true) : [];
     const meta = { characterName: character.name, userName: userIdentity?.name };
 
     if (nativeToolProtocolForConfig(config) && enabledTools.length > 0) {

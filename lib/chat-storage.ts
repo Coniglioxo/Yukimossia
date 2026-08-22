@@ -57,6 +57,12 @@ export type ChatSession = {
     offlineBilingualTranslationPrompt?: string;
     nativeExpandedToolSourceIds?: string[];
     visionImagePromptLimit?: number;
+    developerModeEnabled?: boolean; // 允许角色读取源码的开发者模式
+    developerGithubUsername?: string;
+    developerGithubRepo?: string;
+    developerGithubPat?: string;
+    developerGithubBranch?: string;
+    developerCommitMode?: "confirm" | "direct";
     // Group chat fields
     isGroup?: boolean;
     groupName?: string;

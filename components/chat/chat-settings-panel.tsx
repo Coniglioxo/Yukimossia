@@ -16,6 +16,8 @@ import {
     removeChatContact,
     normalizeVisionImagePromptLimit,
     MAX_VISION_IMAGE_PROMPT_LIMIT,
+    upsertImportedChatMessage,
+    reindexSessionMessageOrdersByTime,
     type ChatMessage,
 } from "@/lib/chat-storage";
 import {
@@ -385,6 +387,13 @@ export function ChatSettingsPanel({
         setPreviewHtml("");
         setShowStatusRegionDialog(true);
     };
+    const [developerModeEnabled, setDeveloperModeEnabled] = useState(session.developerModeEnabled === true);
+    const [showDeveloperDialog, setShowDeveloperDialog] = useState(false);
+    const [devUsername, setDevUsername] = useState(session.developerGithubUsername || "");
+    const [devRepo, setDevRepo] = useState(session.developerGithubRepo || "");
+    const [devPat, setDevPat] = useState(session.developerGithubPat || "");
+    const [devBranch, setDevBranch] = useState(session.developerGithubBranch || "");
+    const [devCommitMode, setDevCommitMode] = useState(session.developerCommitMode || "confirm");
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
@@ -1160,6 +1169,27 @@ export function ChatSettingsPanel({
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    {!session.isGroup && (
+                        <>
+                            <div className="menu-item cursor-pointer" onClick={() => developerModeEnabled && setShowDeveloperDialog(true)}>
+                                <ChatInfoIcon icon={Code} color="var(--c-danger)" />
+                                <div className="menu-label-group">
+                                    <span className="menu-label menu-label-danger">开发者权限（危险）</span>
+                                    <span className="menu-desc">{developerModeEnabled ? "已启用——点此配置 GitHub 授权" : "允许 TA 读写你的 GitHub 仓库代码"}</span>
+                                </div>
+                                <div className="menu-right" onClick={e => e.stopPropagation()}>
+                                    <Toggle
+                                        checked={developerModeEnabled}
+                                        onChange={c => {
+                                            setDeveloperModeEnabled(c);
+                                            updateSession({ developerModeEnabled: c });
+                                            if (c) setShowDeveloperDialog(true);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
                     <KeyboardAutoSendDebounceItem sessionId={session.id} />
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
@@ -1169,6 +1199,88 @@ export function ChatSettingsPanel({
                             <ChevronRight size={16} />
                         </div>
                     </button>
+                </div>
+
+                {/* Export/Import History */}
+                <div className="menu-group">
+                    <button className="menu-item" onClick={() => {
+                        try {
+                            const messages = loadChatMessages(session.id);
+                            const payload = {
+                                type: "ai-phone-chat-history",
+                                version: 1,
+                                sessionId: session.id,
+                                contactId: session.contactId,
+                                isGroup: session.isGroup || false,
+                                exportedAt: new Date().toISOString(),
+                                messageCount: messages.length,
+                                messages,
+                            };
+                            const fileName = session.isGroup
+                                ? `聊天记录-${groupName || "群聊"}-${new Date().toLocaleDateString()}.json`
+                                : `聊天记录-${characterName}-${new Date().toLocaleDateString()}.json`;
+                            void downloadFile(
+                                new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+                                fileName
+                            );
+                        } catch (error) {
+                            console.error("导出失败", error);
+                            alert("导出聊天记录失败，请重试");
+                        }
+                    }}>
+                        <ChatInfoIcon icon={Download} color={BINDING_ACCENTS.api} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导出聊天记录</span>
+                            <span className="menu-desc">导出为 JSON 文件备份</span>
+                        </div>
+                    </button>
+                    <label className="menu-item">
+                        <ChatInfoIcon icon={Upload} color={BINDING_ACCENTS.voice} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导入聊天记录</span>
+                            <span className="menu-desc">从 JSON 文件恢复聊天记录</span>
+                        </div>
+                        <input
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    try {
+                                        const parsed = JSON.parse(String(reader.result || "")) as Record<string, unknown>;
+                                        if (parsed.type !== "ai-phone-chat-history") {
+                                            alert("不是有效的聊天记录文件");
+                                            return;
+                                        }
+                                        const messages = parsed.messages;
+                                        if (!Array.isArray(messages)) {
+                                            alert("聊天记录格式错误");
+                                            return;
+                                        }
+                                        let imported = 0;
+                                        let skipped = 0;
+                                        for (const msg of messages) {
+                                            if (typeof msg === "object" && msg !== null && "id" in msg) {
+                                                const result = upsertImportedChatMessage(msg as ChatMessage);
+                                                if (result.inserted) imported++;
+                                                else skipped++;
+                                            }
+                                        }
+                                        reindexSessionMessageOrdersByTime(session.id);
+                                        alert(`导入完成：新增 ${imported} 条消息${skipped > 0 ? `，跳过 ${skipped} 条已存在的消息` : ""}`);
+                                    } catch (error) {
+                                        console.error("导入失败", error);
+                                        alert("导入聊天记录失败：文件格式错误");
+                                    }
+                                };
+                                reader.readAsText(file);
+                                e.target.value = "";
+                            }}
+                        />
+                    </label>
                 </div>
 
                 {/* Destructive Actions */}
@@ -1664,6 +1776,99 @@ export function ChatSettingsPanel({
                                 }}
                             >
                                 保存并启用
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Developer Settings */}
+            {showDeveloperDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold text-[var(--c-text-title)] text-[var(--c-danger)]">GitHub 开发者授权</div>
+                            <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowDeveloperDialog(false)}><X size={18} /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-3">
+                            <p className="ts-12 text-[var(--c-subtext)] leading-relaxed mb-1">
+                                此功能将允许 AI 角色直接读取并修改你的 GitHub 仓库代码。请确保你信任该模型，并仅在你拥有写权限的仓库中使用。
+                            </p>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">GitHub 用户名</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Coniglioxo"
+                                    value={devUsername}
+                                    onChange={e => setDevUsername(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">仓库名称</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Yukimossia"
+                                    value={devRepo}
+                                    onChange={e => setDevRepo(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">访问令牌 (PAT)</label>
+                                <input
+                                    type="password"
+                                    className="ui-input ts-13"
+                                    placeholder="需要 repo 权限，用于读取私有库与提交代码"
+                                    value={devPat}
+                                    onChange={e => setDevPat(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">目标分支</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="留空默认为 main"
+                                    value={devBranch}
+                                    onChange={e => setDevBranch(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 mt-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">代码提交模式</label>
+                                <select
+                                    className="ui-input ts-13"
+                                    value={devCommitMode}
+                                    onChange={e => setDevCommitMode(e.target.value as "confirm" | "direct")}
+                                >
+                                    <option value="confirm">提交前需要我在界面确认 (安全)</option>
+                                    <option value="direct">直接提交并推送到仓库 (危险)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[var(--c-border)] p-4 bg-[var(--c-soft-bg)]">
+                            <button 
+                                type="button" 
+                                className="ui-btn ui-btn-ghost flex-1"
+                                onClick={() => setShowDeveloperDialog(false)}
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-danger flex-1"
+                                onClick={() => {
+                                    updateSession({
+                                        developerGithubUsername: devUsername,
+                                        developerGithubRepo: devRepo,
+                                        developerGithubPat: devPat,
+                                        developerGithubBranch: devBranch,
+                                        developerCommitMode: devCommitMode
+                                    });
+                                    setShowDeveloperDialog(false);
+                                }}
+                            >
+                                保存配置
                             </button>
                         </div>
                     </div>

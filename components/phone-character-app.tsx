@@ -1067,7 +1067,7 @@ function CharListView({
                 <span>配角</span>
               </button>
               <input
-                ref={fileRef} type="file" accept=".json,.png,image/png,application/json" className="hidden"
+                ref={fileRef} type="file" accept="*" className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) await handleImportFile(file);
@@ -1174,7 +1174,7 @@ function CharListView({
                   <div className={`char-polaroid-tape-base ${tapeStyles[tapeMod]}`} style={{ top: -10, width: tapeWidth, transform: `translateX(-50%) rotate(${tapeRot}deg)` }} />
                   {hash % 3 === 0 && (
                     <div className="char-clue-label" style={{ top: -10, left: -6, transform: `rotate(${-(char.canvasRot || 0) - 5}deg)` }}>
-                      0{idx + 1} ASSET
+                      0{idx + 1} 资产
                     </div>
                   )}
                   <div className="char-polaroid-img-wrapper" style={{ boxShadow: "inset 0 0 10px rgba(0,0,0,0.1)" }}>
@@ -1963,7 +1963,7 @@ function CharArchiveView({
   }
 
   // Helper limits
-  const personaText = persona || "NO DATA AVAILABLE.";
+  const personaText = persona || "暂无设定资料。";
   const timeZoneOptions = getCharacterTimeZoneOptions(timeZone || timeZoneSearch);
   const timeZoneQuery = timeZoneSearch.trim().toLowerCase();
   const matchedTimeZoneOptions = timeZoneQuery
@@ -2004,8 +2004,8 @@ function CharArchiveView({
 
         <div className="char-archive-header">
           <div>
-            <div className="char-archive-title">{isEditing ? "档案信息" : "档案信息"}</div>
-            <div className="char-archive-subtitle">THE INTELLIGENCE DATABASE</div>
+            <div className="char-archive-title">{isEditing ? "编辑档案" : "档案\n信息"}</div>
+            <div className="char-archive-subtitle">情报数据库</div>
           </div>
           <div className="char-archive-id">ID: {char.id.slice(0, 8).toUpperCase()}</div>
         </div>
@@ -2037,7 +2037,7 @@ function CharArchiveView({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="*"
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
@@ -2081,7 +2081,7 @@ function CharArchiveView({
               {isEditing ? (
                 <input
                   className="char-archive-input ts-20 font-black w-full text-left bg-[var(--c-input)]/50 border border-dashed border-[#666] font-inherit tracking-[1px]"
-                  placeholder="Name or Codename"
+                  placeholder="姓名或代号"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   style={{
@@ -2090,7 +2090,7 @@ function CharArchiveView({
                 />
               ) : (
                 <h2 className="whitespace-pre-wrap break-words ts-20 font-black m-0 tracking-[1px]">
-                  {name || "UNNAMED"}
+                  {name || "未命名"}
                 </h2>
               )}
             </div>
@@ -2156,11 +2156,11 @@ function CharArchiveView({
                   className="char-timezone-trigger"
                   onClick={openTimeZonePicker}
                 >
-                  {timeZone || "SYSTEM"}
+                  {timeZone || "系统默认"}
                 </button>
               </div>
             ) : (
-              <span className="char-archive-val">{timeZone || "SYSTEM"}</span>
+              <span className="char-archive-val">{timeZone || "系统默认"}</span>
             )}
           </div>
         </div>
@@ -2267,9 +2267,9 @@ function CharArchiveView({
               </>
             ) : !dummy && !isEditing ? (
               <>
-                <button className="char-archive-btn" onClick={onExportPng}>EXPORT IMG</button>
-                <button className="char-archive-btn" onClick={onExportJson}>EXPORT JSON</button>
-                <button className="char-archive-btn char-archive-btn-danger" onClick={() => setConfirmDelete(true)}>DELETE</button>
+                <button className="char-archive-btn" onClick={onExportPng}>导出图片</button>
+                <button className="char-archive-btn" onClick={onExportJson}>导出配置</button>
+                <button className="char-archive-btn char-archive-btn-danger" onClick={() => setConfirmDelete(true)}>删除</button>
               </>
             ) : null
           )}
