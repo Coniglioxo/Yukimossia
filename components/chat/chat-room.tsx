@@ -10,7 +10,6 @@ import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
 import { PhotoInputModal, TextPhotoModal, TextFileInputModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal, type ChatTextFileSelection } from "./rich-input-modals";
 import { GeneratedImageErrorDialog } from "./generated-image-error-dialog";
-import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
