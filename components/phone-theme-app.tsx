@@ -372,8 +372,8 @@ export function PhoneThemeApp({
                       type="button"
                       onClick={() => setSection("pwa_icon" as any)}
                     >
-                      <span className="card-icon" style={menuIconStyle(iconItem.color)}>
-                        <iconItem.icon />
+                      <span className="card-icon card-icon-glass">
+                        <GlassIcon name={iconItem.glass} />
                       </span>
                       <span className="menu-label appearance-menu-item-label">{iconItem.label}</span>
                       <span className="menu-right">
