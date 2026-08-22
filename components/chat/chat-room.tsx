@@ -9,6 +9,8 @@ import { isKnownStickerLabel } from "@/lib/sticker-data";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
 import { PhotoInputModal, TextPhotoModal, TextFileInputModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal, type ChatTextFileSelection } from "./rich-input-modals";
+import { GeneratedImageErrorDialog } from "./generated-image-error-dialog";
+import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
@@ -31,6 +33,7 @@ import { loadCustomAppChatPlusActions, type RegisteredCustomAppChatPlusAction } 
 import { CUSTOM_APPS_UPDATED_EVENT, getInstalledCustomApp } from "@/lib/custom-app-storage";
 import { toCustomAppIconId, type InstalledCustomApp } from "@/lib/custom-app-types";
 import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
+import { CustomAppForegroundBoundary } from "@/components/app-market/custom-app-failure";
 
 import { ChatSettingsPanel } from "./chat-settings-panel";
 import { VoiceCallScreen } from "./voice-call-screen";
@@ -45,6 +48,7 @@ import { generateGroupChatCompletion, generateGroupOfflineChatCompletion, parseG
 import { appendChatOfflineTurn, deleteChatOfflineTurn, deleteChatOfflineTurnsFrom, loadChatOfflineTurns, parseOfflineResponse, saveChatOfflineTurns, updateChatOfflineTurn, type ChatOfflineTurn } from "@/lib/chat-offline-storage";
 import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
 import { scheduleFollowUp, cancelFollowUp } from "@/lib/follow-up-service";
+import { useKeyboardDismissAutoSend } from "@/components/chat/use-keyboard-dismiss-auto-send";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
 import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
@@ -1077,6 +1081,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [pendingGenerate, setPendingGenerate] = useState(false);
     const [chatToast, setChatToast] = useState<string | null>(null);
     const chatToastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+    // 自动生图失败：弹一次弹窗提示，关掉即消失（同一轮里多张失败只提示第一条）
+    const [imageGenerationFailure, setImageGenerationFailure] = useState<string | null>(null);
     const [cloudDeletePending, setCloudDeletePending] = useState<{ count: number } | null>(null);
     const [showPlusMenu, setShowPlusMenu] = useState(false);
     const [customPlusActions, setCustomPlusActions] = useState<RegisteredCustomAppChatPlusAction[]>(() => loadCustomAppChatPlusActions());
@@ -2303,8 +2309,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (!(session.participantIds || []).includes(r.characterId)) continue;
             if (isGroupMuted(session, r.characterId)) continue;
             const responseBatchId = createResponseBatchId();
-            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
+            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
             const parts = stripInvalidStickerParts(rawParts, r.characterId);
+
+            if (fileSummary) {
+                const msgs = loadChatMessages(session.id);
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = msgs[i];
+                    if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                        updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                        break;
+                    }
+                }
+            }
             let attachedState = false;
             let savedAnyPart = false;
             for (const part of parts) {
@@ -2640,6 +2657,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             .catch(error => {
                 if (!isAbortLikeError(error)) {
                     console.warn("[ImageGeneration] Failed to generate chat image:", error);
+                    const reason = error instanceof Error ? error.message : String(error);
+                    setImageGenerationFailure(prev => prev ?? reason);
                 }
                 return null;
             });
@@ -3732,6 +3751,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         if (shouldRunDeclineReply) await triggerReply();
     };
 
+    // 收起键盘（或关掉表情/加号面板）并安静 N 秒后自动触发回复，
+    // 等价于替用户点一次「触发回复」。判定全在 hook 内部，配置关掉后与手动模式一致。
+    useKeyboardDismissAutoSend(wrapperRef, {
+        active: !offlineMode && !isMultiSelectMode,
+        pending: pendingGenerate,
+        generating: isGenerating,
+        panelOpen: showEmojiPanel || showStickerPanel || showPlusMenu,
+        sessionId: session.id,
+        onTrigger: () => { void triggerAIResponse(); },
+    });
+
     useEffect(() => {
         const handleCustomAppReplyRequest = (event: Event) => {
             const detail = (event as CustomEvent<{
@@ -4449,8 +4479,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId, stateCutoff ? { before: stateCutoff } : undefined);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(editedResponseContent, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(editedResponseContent, previousState);
         const parts = stripInvalidStickerParts(rawParts);
+
+        if (fileSummary) {
+            const msgs = loadChatMessages(session.id);
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                    updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                    break;
+                }
+            }
+        }
         const normalizedParts = normalizeEditedAssistantParts(parts);
         if (normalizedParts.length === 0 && (statusPanel || innerMonologue)) {
             normalizedParts.push({ content: "" });
@@ -6065,13 +6106,23 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             </button>
                         </div>
                         <div className="chat-custom-app-body">
-                            <CustomAppRunner
-                                app={activeCustomChatPlus.app}
-                                launchContext={activeCustomChatPlus.launchContext}
-                                embedded
+                            <CustomAppForegroundBoundary
+                                key={activeCustomChatPlus.app.id}
+                                appName={activeCustomChatPlus.app.name}
+                                appId={activeCustomChatPlus.app.id}
+                                appVersion={activeCustomChatPlus.app.version}
+                                manifestId={activeCustomChatPlus.app.manifest?.id}
+                                closeLabel="返回聊天"
                                 onClose={() => setActiveCustomChatPlus(null)}
-                                onNotice={showChatToast}
-                            />
+                            >
+                                <CustomAppRunner
+                                    app={activeCustomChatPlus.app}
+                                    launchContext={activeCustomChatPlus.launchContext}
+                                    embedded
+                                    onClose={() => setActiveCustomChatPlus(null)}
+                                    onNotice={showChatToast}
+                                />
+                            </CustomAppForegroundBoundary>
                         </div>
                     </div>
                 </div>
@@ -6408,6 +6459,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {imageGenerationFailure && (
+                <GeneratedImageErrorDialog
+                    message={imageGenerationFailure}
+                    onClose={() => setImageGenerationFailure(null)}
+                />
             )}
 
             {/* Chat toast notification (overlay, does not affect layout) */}

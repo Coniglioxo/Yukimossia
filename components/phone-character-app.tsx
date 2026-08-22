@@ -2077,7 +2077,7 @@ function CharArchiveView({
 
             {/* Name Box moved to the top of Right Column */}
             <div className="char-archive-name-box flex-1 flex flex-col justify-center text-left border-b border-[var(--c-panel-border)]" style={{ padding: "4px 6px 8px 6px" }}>
-              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">目标姓名 / 代号</span>
+              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">目标名称/代号</span>
               {isEditing ? (
                 <input
                   className="char-archive-input ts-20 font-black w-full text-left bg-[var(--c-input)]/50 border border-dashed border-[#666] font-inherit tracking-[1px]"
@@ -2169,7 +2169,7 @@ function CharArchiveView({
         <div className="char-archive-text-section border-b-0">
           <div className="char-log-entry mb-4">
             <div className="char-log-entry-header">
-              <span>设定 / 特征</span>
+              <span>人设/特质</span>
             </div>
             {isEditing ? (
               <AutoResizingTextarea
@@ -2192,7 +2192,7 @@ function CharArchiveView({
           {(isEditing || personality.trim()) && (
             <div className="char-log-entry mb-4 border-t border-dashed border-[#999] pt-3">
               <div className="char-log-entry-header">
-                <span>PERSONALITY</span>
+                <span>性格</span>
               </div>
               {isEditing ? (
                 <AutoResizingTextarea
