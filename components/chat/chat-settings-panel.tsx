@@ -760,7 +760,9 @@ export function ChatSettingsPanel({
 
     useEffect(() => {
         if (showBackgroundDialog) {
-            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages }) => {
+            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages, migrateSessionBackgroundsToGlobal }) => {
+                // 首次打开弹窗时自动迁移旧数据
+                migrateSessionBackgroundsToGlobal();
                 setGlobalBackgroundImages(loadGlobalBackgroundImages());
             }).catch(() => {});
         }

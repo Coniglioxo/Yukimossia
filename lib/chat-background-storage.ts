@@ -27,3 +27,36 @@ export function removeGlobalBackgroundImage(imageId: string): void {
     const images = loadGlobalBackgroundImages();
     saveGlobalBackgroundImages(images.filter(id => id !== imageId));
 }
+
+/**
+ * 从所有会话迁移旧的背景图片到全局库
+ * 避免旧图片变成孤儿文件占用空间
+ */
+export function migrateSessionBackgroundsToGlobal(): void {
+    try {
+        const sessions = require("./chat-storage").loadChatSessions() as Array<Record<string, unknown>>;
+        const allImageIds = new Set<string>();
+        
+        // 收集所有会话中的背景图片 ID
+        sessions.forEach(session => {
+            const oldImages = session.backgroundImages;
+            if (Array.isArray(oldImages)) {
+                oldImages.forEach(id => {
+                    if (typeof id === "string" && id) {
+                        allImageIds.add(id);
+                    }
+                });
+            }
+        });
+        
+        // 合并到全局库
+        if (allImageIds.size > 0) {
+            const globalImages = loadGlobalBackgroundImages();
+            const merged = Array.from(new Set([...globalImages, ...Array.from(allImageIds)]));
+            saveGlobalBackgroundImages(merged);
+            console.log(`[背景图片迁移] 已迁移 ${allImageIds.size} 张图片到全局库`);
+        }
+    } catch (error) {
+        console.error("[背景图片迁移] 迁移失败", error);
+    }
+}
