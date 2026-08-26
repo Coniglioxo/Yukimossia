@@ -1781,7 +1781,7 @@ export function ChatSettingsPanel({
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="上传图片" onClick={() => bgUploadInputRef.current?.click()}><Upload size={16} /></button>
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowBackgroundDialog(false)}><X size={18} /></button>
                             </div>
-                            <input ref={bgUploadInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
+                            <input ref={bgUploadInputRef} type="file" accept="*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
                         </div>
                         <div className="flex-1 overflow-y-auto px-5 pb-4">
                             {backgroundImages.length === 0 ? (
