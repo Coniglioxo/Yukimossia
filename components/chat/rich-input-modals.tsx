@@ -59,7 +59,7 @@ export function PhotoInputModal({ onSend, onClose }: PhotoInputModalProps) {
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="*"
                         className="hidden"
                         onChange={handleFileChange}
                     />
