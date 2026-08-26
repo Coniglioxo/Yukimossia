@@ -606,11 +606,13 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     theaterMode: boolean;
     enterToSendEnabled: boolean;
     quotingMessage: ChatMessage | null;
+    sendAsCharacter: boolean;
     showEmojiPanel: boolean;
     showStickerPanel: boolean;
     showPlusMenu: boolean;
     customPlusActions: RegisteredCustomAppChatPlusAction[];
     onClearQuote: () => void;
+    onToggleSendAsCharacter: () => void;
     onToggleOfflineMode: () => void;
     onClosePanels: () => void;
     onToggleEmojiPanel: () => void;
@@ -637,11 +639,13 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     theaterMode,
     enterToSendEnabled,
     quotingMessage,
+    sendAsCharacter,
     showEmojiPanel,
     showStickerPanel,
     showPlusMenu,
     customPlusActions,
     onClearQuote,
+    onToggleSendAsCharacter,
     onToggleOfflineMode,
     onClosePanels,
     onToggleEmojiPanel,
@@ -716,6 +720,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     );
     const suggestEnabled = !inputLocked && !panelOpen && !suggestClosed && inputText.trim().length > 0;
     const plusMenuItems = [
+        ...(!isGroup ? [{ icon: <User size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "角色身份", onClick: () => { onToggleSendAsCharacter(); onClosePanels(); } }] : []),
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>, label: "照片墙", onClick: () => onOpenRichModal("photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="14" y2="12" /><line x1="7" y1="16" x2="11" y2="16" /></svg>, label: "文字图片", onClick: () => onOpenRichModal("text_photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>, label: "文件", onClick: () => onOpenRichModal("file") },
@@ -762,6 +767,14 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                         引用 {quotingMessage.role === "user" ? "你" : characterName}: {quotingMessage.content.slice(0, 40)}
                     </div>
                     <button onClick={onClearQuote} className="ui-bare-btn text-[var(--c-icon)] ts-16 leading-none p-[2px]">✕</button>
+                </div>
+            )}
+            {sendAsCharacter && !isGroup && (
+                <div className="chat-quote-bar">
+                    <div className="flex-1 ts-12 text-[var(--c-icon)] overflow-hidden text-ellipsis whitespace-nowrap">
+                        以角色身份发送: {characterName}
+                    </div>
+                    <button onClick={onToggleSendAsCharacter} className="ui-bare-btn text-[var(--c-icon)] ts-16 leading-none p-[2px]">✕</button>
                 </div>
             )}
 
@@ -1101,6 +1114,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [mediaDetailMsg, setMediaDetailMsg] = useState<ChatMessage | null>(null);
     // Quote reply
     const [quotingMessage, setQuotingMessage] = useState<ChatMessage | null>(null);
+    // Role sender (send as character in single chat)
+    const [sendAsCharacter, setSendAsCharacter] = useState(false);
     // Emoji panel
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [showStickerPanel, setShowStickerPanel] = useState(false);
@@ -3826,6 +3841,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         } : undefined;
         setQuotingMessage(null);
 
+        // If sending as character (single chat only)
+        const sendingAsCharacter = sendAsCharacter && !session.isGroup;
+        if (sendAsCharacter) {
+            setSendAsCharacter(false);
+        }
+
         const commitSendText = (currentText: string) => {
             // 掷骰子：整条消息就是骰子图标时，发骰子气泡（内容仅图标），
             // 点数由系统旁白公布——避免结果挂在 user 消息上被角色模仿格式
@@ -3834,10 +3855,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
             const newMsg = pushChatMessage({
                 sessionId: session.id,
-                role: "user",
+                role: sendingAsCharacter ? "assistant" : "user",
                 content: currentText,
                 mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
                 mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
+                ...(sendingAsCharacter && character ? {
+                    senderCharacterId: character.id,
+                    senderName: character.name,
+                } : {}),
             });
 
             setMessages(prev => [...prev, newMsg]);
@@ -3849,7 +3874,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 });
                 setMessages(prev => [...prev, diceAside]);
             }
-            setPendingGenerate(true);
+            // 以角色身份发送时不触发自动生成
+            if (!sendingAsCharacter) {
+                setPendingGenerate(true);
+            }
         };
 
         // 聊天插件织入点 user.beforeSend：无插件时走原同步路径，
@@ -5987,11 +6015,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 	                theaterMode={theaterMode}
 	                enterToSendEnabled={enterToSendEnabled}
 	                quotingMessage={quotingMessage}
+                sendAsCharacter={sendAsCharacter}
                 showEmojiPanel={showEmojiPanel}
                 showStickerPanel={showStickerPanel}
                 showPlusMenu={showPlusMenu}
                 customPlusActions={customPlusActions}
                 onClearQuote={() => setQuotingMessage(null)}
+                onToggleSendAsCharacter={() => setSendAsCharacter(!sendAsCharacter)}
                 onToggleOfflineMode={toggleOfflineMode}
                 onClosePanels={() => { setShowEmojiPanel(false); setShowStickerPanel(false); setShowPlusMenu(false); }}
 	                onToggleEmojiPanel={() => { setShowEmojiPanel(!showEmojiPanel); setShowStickerPanel(false); setShowPlusMenu(false); }}
