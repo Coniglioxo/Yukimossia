@@ -283,6 +283,70 @@ function ChatInfoIcon({ icon: Icon, color }: { icon: LucideIcon; color: string }
     );
 }
 
+function BackgroundImageThumbnail({
+    imgId,
+    isSelected,
+    onSelect,
+    onDelete,
+}: {
+    imgId: string;
+    isSelected: boolean;
+    onSelect: (id: string) => void;
+    onDelete: (id: string) => void;
+}) {
+    const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        import("@/lib/chat-asset-storage").then(({ getChatImageFromIndexedDB }) => {
+            getChatImageFromIndexedDB(imgId).then(url => {
+                if (url) setDataUrl(url);
+            }).catch(() => {});
+        }).catch(() => {});
+    }, [imgId]);
+
+    return (
+        <div
+            className="relative aspect-[3/4] rounded-xl overflow-hidden cursor-pointer border-2 transition-all"
+            style={{
+                borderColor: isSelected ? "var(--c-primary)" : "transparent",
+                background: "color-mix(in srgb, var(--c-text) 6%, transparent)"
+            }}
+            onClick={() => onSelect(imgId)}
+        >
+            {dataUrl ? (
+                <img
+                    src={dataUrl}
+                    alt="背景图片"
+                    className="w-full h-full object-cover"
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon size={32} className="opacity-20" />
+                </div>
+            )}
+            {isSelected && (
+                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--c-primary)] flex items-center justify-center">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M11.6667 3.5L5.25 9.91667L2.33333 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </div>
+            )}
+            <button
+                type="button"
+                className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm("确定要删除这张背景图片吗？")) {
+                        onDelete(imgId);
+                    }
+                }}
+            >
+                <Trash2 size={14} className="text-white" />
+            </button>
+        </div>
+    );
+}
+
 export function ChatSettingsPanel({
     session,
     onClose,
@@ -293,6 +357,12 @@ export function ChatSettingsPanel({
     offlineHistoryBusy = false,
 }: ChatSettingsPanelProps) {
     const [backgroundImage, setBackgroundImage] = useState<string>(session.backgroundImage || "");
+    const [backgroundImages, setBackgroundImages] = useState<string[]>(() => {
+        const stored = (session as Record<string, unknown>).backgroundImages;
+        return Array.isArray(stored) ? stored : [];
+    });
+    const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
+    const bgUploadInputRef = useRef<HTMLInputElement | null>(null);
     const [alias, setAlias] = useState<string>(session.alias || "");
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
@@ -689,6 +759,39 @@ export function ChatSettingsPanel({
             console.error("Failed to save image", error);
             alert("图片保存失败，请重试");
         }
+    };
+
+    const handleBackgroundImageUpload = async (file: File) => {
+        try {
+            const { saveChatImageToIndexedDB } = await import("@/lib/chat-asset-storage");
+            const id = await saveChatImageToIndexedDB(file);
+            const updated = [...backgroundImages, id];
+            setBackgroundImages(updated);
+            updateSession({ backgroundImages: updated } as Partial<ChatSession>);
+        } catch (error) {
+            console.error("Failed to save background image", error);
+            alert("图片保存失败，请重试");
+        }
+    };
+
+    const selectBackgroundImage = (id: string) => {
+        setBackgroundImage(id);
+        updateSession({ backgroundImage: id });
+    };
+
+    const deleteBackgroundImage = (id: string) => {
+        const updated = backgroundImages.filter(imgId => imgId !== id);
+        setBackgroundImages(updated);
+        updateSession({ backgroundImages: updated } as Partial<ChatSession>);
+        if (backgroundImage === id) {
+            setBackgroundImage("");
+            updateSession({ backgroundImage: "" });
+        }
+    };
+
+    const resetBackgroundToDefault = () => {
+        setBackgroundImage("");
+        updateSession({ backgroundImage: "" });
     };
 
     // Group video: per-participant background upload
@@ -1101,15 +1204,14 @@ export function ChatSettingsPanel({
 
                 {/* Backgrounds & UI */}
                 <div className="menu-group">
-                    <label className="menu-item">
+                    <button className="menu-item" onClick={() => setShowBackgroundDialog(true)}>
                         <ChatInfoIcon icon={ImageIcon} color={BINDING_ACCENTS.api} />
                         <div className="menu-label-group"><span className="menu-label">聊天背景</span></div>
                         <div className="menu-right">
-                            {backgroundImage && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setBackgroundImage(""); updateSession({ backgroundImage: "" }); }}>清除</button></>}
+                            {backgroundImage && <span className="menu-desc mr-1">已设置</span>}
                             <ChevronRight size={16} />
                         </div>
-                        <input type="file" accept="*" onChange={e => handleImageUpload(e, setBackgroundImage, "backgroundImage")} className="hidden" />
-                    </label>
+                    </button>
                     {session.isGroup ? (
                         <>
                             <div className="menu-item" style={{ cursor: "default" }}>
@@ -1669,6 +1771,68 @@ export function ChatSettingsPanel({
                 </div>
                 </div>
             )}
+            {/* Modal: Background Images Manager */}
+            {showBackgroundDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="聊天背景管理">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold text-[var(--c-text-title)]">聊天背景</div>
+                            <div className="flex items-center gap-1.5">
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="上传图片" onClick={() => bgUploadInputRef.current?.click()}><Upload size={16} /></button>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowBackgroundDialog(false)}><X size={18} /></button>
+                            </div>
+                            <input ref={bgUploadInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-5 pb-4">
+                            {backgroundImages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                    <ImageIcon size={48} className="opacity-20 mb-3" />
+                                    <div className="ts-13 opacity-45">还没有上传背景图片</div>
+                                    <button
+                                        type="button"
+                                        className="ui-btn ui-btn-ghost mt-4"
+                                        onClick={() => bgUploadInputRef.current?.click()}
+                                    >
+                                        上传图片
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {backgroundImages.map(imgId => (
+                                        <BackgroundImageThumbnail
+                                            key={imgId}
+                                            imgId={imgId}
+                                            isSelected={backgroundImage === imgId}
+                                            onSelect={selectBackgroundImage}
+                                            onDelete={deleteBackgroundImage}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex gap-2 px-5 pb-4 pt-1 border-t border-[var(--c-border)]">
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-outline flex-1"
+                                onClick={() => {
+                                    resetBackgroundToDefault();
+                                    setShowBackgroundDialog(false);
+                                }}
+                            >
+                                恢复默认
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-primary flex-1"
+                                onClick={() => setShowBackgroundDialog(false)}
+                            >
+                                完成
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showStatusRegionDialog && (
                 <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="自定义状态栏">
                     <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
