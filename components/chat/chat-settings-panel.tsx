@@ -357,12 +357,9 @@ export function ChatSettingsPanel({
     offlineHistoryBusy = false,
 }: ChatSettingsPanelProps) {
     const [backgroundImage, setBackgroundImage] = useState<string>(session.backgroundImage || "");
-    const [backgroundImages, setBackgroundImages] = useState<string[]>(() => {
-        const stored = (session as Record<string, unknown>).backgroundImages;
-        return Array.isArray(stored) ? stored : [];
-    });
     const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
     const bgUploadInputRef = useRef<HTMLInputElement | null>(null);
+    const [globalBackgroundImages, setGlobalBackgroundImages] = useState<string[]>([]);
     const [alias, setAlias] = useState<string>(session.alias || "");
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
@@ -761,13 +758,21 @@ export function ChatSettingsPanel({
         }
     };
 
+    useEffect(() => {
+        if (showBackgroundDialog) {
+            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages }) => {
+                setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            }).catch(() => {});
+        }
+    }, [showBackgroundDialog]);
+
     const handleBackgroundImageUpload = async (file: File) => {
         try {
             const { saveChatImageToIndexedDB } = await import("@/lib/chat-asset-storage");
+            const { addGlobalBackgroundImage, loadGlobalBackgroundImages } = await import("@/lib/chat-background-storage");
             const id = await saveChatImageToIndexedDB(file);
-            const updated = [...backgroundImages, id];
-            setBackgroundImages(updated);
-            updateSession({ backgroundImages: updated } as Partial<ChatSession>);
+            addGlobalBackgroundImage(id);
+            setGlobalBackgroundImages(loadGlobalBackgroundImages());
         } catch (error) {
             console.error("Failed to save background image", error);
             alert("图片保存失败，请重试");
@@ -779,13 +784,34 @@ export function ChatSettingsPanel({
         updateSession({ backgroundImage: id });
     };
 
-    const deleteBackgroundImage = (id: string) => {
-        const updated = backgroundImages.filter(imgId => imgId !== id);
-        setBackgroundImages(updated);
-        updateSession({ backgroundImages: updated } as Partial<ChatSession>);
-        if (backgroundImage === id) {
-            setBackgroundImage("");
-            updateSession({ backgroundImage: "" });
+    const deleteBackgroundImage = async (id: string) => {
+        try {
+            const { removeGlobalBackgroundImage, loadGlobalBackgroundImages } = await import("@/lib/chat-background-storage");
+            removeGlobalBackgroundImage(id);
+            setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            
+            // 如果删除的是当前使用的背景，清除所有会话中的该背景
+            if (backgroundImage === id) {
+                setBackgroundImage("");
+                updateSession({ backgroundImage: "" });
+            }
+            
+            // 可选：清理其他会话中使用该背景的引用
+            const sessions = loadChatSessions();
+            let needUpdate = false;
+            const updated = sessions.map(s => {
+                if (s.backgroundImage === id) {
+                    needUpdate = true;
+                    return { ...s, backgroundImage: "" };
+                }
+                return s;
+            });
+            if (needUpdate) {
+                saveChatSessions(updated);
+            }
+        } catch (error) {
+            console.error("Failed to delete background image", error);
+            alert("删除失败，请重试");
         }
     };
 
@@ -1784,10 +1810,11 @@ export function ChatSettingsPanel({
                             <input ref={bgUploadInputRef} type="file" accept="*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
                         </div>
                         <div className="flex-1 overflow-y-auto px-5 pb-4">
-                            {backgroundImages.length === 0 ? (
+                            {globalBackgroundImages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-12 text-center">
                                     <ImageIcon size={48} className="opacity-20 mb-3" />
                                     <div className="ts-13 opacity-45">还没有上传背景图片</div>
+                                    <div className="ts-11 opacity-30 mt-1">图片库全局共享，所有角色通用</div>
                                     <button
                                         type="button"
                                         className="ui-btn ui-btn-ghost mt-4"
@@ -1798,7 +1825,7 @@ export function ChatSettingsPanel({
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 gap-3">
-                                    {backgroundImages.map(imgId => (
+                                    {globalBackgroundImages.map(imgId => (
                                         <BackgroundImageThumbnail
                                             key={imgId}
                                             imgId={imgId}
