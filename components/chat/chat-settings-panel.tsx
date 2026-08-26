@@ -1108,7 +1108,7 @@ export function ChatSettingsPanel({
                             {backgroundImage && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setBackgroundImage(""); updateSession({ backgroundImage: "" }); }}>清除</button></>}
                             <ChevronRight size={16} />
                         </div>
-                        <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setBackgroundImage, "backgroundImage")} className="hidden" />
+                        <input type="file" accept="*" onChange={e => handleImageUpload(e, setBackgroundImage, "backgroundImage")} className="hidden" />
                     </label>
                     {session.isGroup ? (
                         <>
@@ -1126,7 +1126,7 @@ export function ChatSettingsPanel({
                                         {groupVideoBgs[c.id] && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); const updated = { ...groupVideoBgs }; delete updated[c.id]; setGroupVideoBgs(updated); updateSession({ groupVideoBackgrounds: updated }); }}>清除</button></>}
                                         <ChevronRight size={14} />
                                     </div>
-                                    <input type="file" accept="image/*" onChange={e => handleGroupVideoBgUpload(e, c.id)} className="hidden" />
+                                    <input type="file" accept="*" onChange={e => handleGroupVideoBgUpload(e, c.id)} className="hidden" />
                                 </label>
                             ))}
                             <label className="menu-item" style={{ paddingLeft: 72 }}>
@@ -1142,7 +1142,7 @@ export function ChatSettingsPanel({
                                     {groupVideoBgs["self"] && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); const updated = { ...groupVideoBgs }; delete updated["self"]; setGroupVideoBgs(updated); updateSession({ groupVideoBackgrounds: updated }); }}>清除</button></>}
                                     <ChevronRight size={14} />
                                 </div>
-                                <input type="file" accept="image/*" onChange={e => handleGroupVideoBgUpload(e, "self")} className="hidden" />
+                                <input type="file" accept="*" onChange={e => handleGroupVideoBgUpload(e, "self")} className="hidden" />
                             </label>
                         </>
                     ) : (
@@ -1153,7 +1153,7 @@ export function ChatSettingsPanel({
                                 {videoBackground && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setVideoBackground(""); updateSession({ videoBackground: "" }); }}>清除</button></>}
                                 <ChevronRight size={16} />
                             </div>
-                            <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setVideoBackground, "videoBackground")} className="hidden" />
+                            <input type="file" accept="*" onChange={e => handleImageUpload(e, setVideoBackground, "videoBackground")} className="hidden" />
                         </label>
                     )}
                     <label className="menu-item">
@@ -1163,7 +1163,7 @@ export function ChatSettingsPanel({
                             {voiceBackground && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setVoiceBackground(""); updateSession({ voiceBackground: "" }); }}>清除</button></>}
                             <ChevronRight size={16} />
                         </div>
-                        <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setVoiceBackground, "voiceBackground")} className="hidden" />
+                        <input type="file" accept="*" onChange={e => handleImageUpload(e, setVoiceBackground, "voiceBackground")} className="hidden" />
                     </label>
                 </div>
 
