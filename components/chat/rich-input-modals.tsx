@@ -16,14 +16,65 @@ export function PhotoInputModal({ onSend, onClose }: PhotoInputModalProps) {
     const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const compressImage = async (file: File, maxWidth = 1920, maxHeight = 1920, quality = 0.92): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let { width, height } = img;
+                    
+                    // 计算缩放比例，保持宽高比
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('无法获取 canvas context'));
+                        return;
+                    }
+                    
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // 使用较高的质量参数，默认 0.92 可以在文件大小和清晰度之间取得良好平衡
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedDataUrl);
+                };
+                
+                img.onerror = () => reject(new Error('图片加载失败'));
+                img.src = e.target?.result as string;
+            };
+            
+            reader.onerror = () => reject(new Error('文件读取失败'));
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            setImageDataUrl(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+        
+        try {
+            // 压缩图片，quality=0.92 保证高清晰度
+            const compressed = await compressImage(file, 1920, 1920, 0.92);
+            setImageDataUrl(compressed);
+        } catch (error) {
+            console.error('图片处理失败:', error);
+            // 降级方案：使用原图
+            const reader = new FileReader();
+            reader.onload = () => {
+                setImageDataUrl(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const canSend = !!imageDataUrl;
