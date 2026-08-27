@@ -786,43 +786,48 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                     onClose={() => setSuggestClosed(true)}
                 />
             )}
-            <textarea
-                ref={textareaRef}
-                rows={1}
-                value={inputText}
-                onChange={e => {
-                    setInputText(e.target.value);
-                    setSuggestClosed(false);
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-                }}
-                onFocus={(e) => {
-                    if (panelOpen) {
-                        e.target.blur();
-                        onClosePanels();
-                        const target = e.target as HTMLTextAreaElement;
-                        requestAnimationFrame(() => requestAnimationFrame(() => target.focus()));
-                    }
-                    setSuggestClosed(false);
-                }}
-                onBlur={() => setSuggestClosed(true)}
-                onKeyDown={e => {
-                    if (e.key === "Escape") {
-                        setSuggestClosed(true);
-                        return;
-                    }
-                    if (shouldSendChatInputOnEnter(e, enterToSendEnabled)) {
-                        e.preventDefault();
-                        handleSubmit();
-                    }
-                }}
-                enterKeyHint={enterToSendEnabled ? "send" : "enter"}
-                className="chat-input-textarea"
-                disabled={inputLocked}
-                placeholder={inputLocked
-                    ? (isSpectator ? "围观中，你不在这个群里" : `禁言中，剩余${Math.ceil(muteRemainingMs / 60000)}分钟`)
-                    : (theaterMode ? "写下番外指令..." : undefined)}
-            />
+            <div className="chat-input-field">
+                {!inputText && !inputLocked && !theaterMode && !isGroup && (
+                    <span className="chat-input-placeholder" aria-hidden="true" />
+                )}
+                <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={inputText}
+                    onChange={e => {
+                        setInputText(e.target.value);
+                        setSuggestClosed(false);
+                        e.target.style.height = "auto";
+                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                    }}
+                    onFocus={(e) => {
+                        if (panelOpen) {
+                            e.target.blur();
+                            onClosePanels();
+                            const target = e.target as HTMLTextAreaElement;
+                            requestAnimationFrame(() => requestAnimationFrame(() => target.focus()));
+                        }
+                        setSuggestClosed(false);
+                    }}
+                    onBlur={() => setSuggestClosed(true)}
+                    onKeyDown={e => {
+                        if (e.key === "Escape") {
+                            setSuggestClosed(true);
+                            return;
+                        }
+                        if (shouldSendChatInputOnEnter(e, enterToSendEnabled)) {
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                    }}
+                    enterKeyHint={enterToSendEnabled ? "send" : "enter"}
+                    className="chat-input-textarea"
+                    disabled={inputLocked}
+                    placeholder={inputLocked
+                        ? (isSpectator ? "围观中，你不在这个群里" : `禁言中，剩余${Math.ceil(muteRemainingMs / 60000)}分钟`)
+                        : (theaterMode ? "写下番外指令..." : undefined)}
+                />
+            </div>
 
             <div className="chat-input-actions">
                 <button

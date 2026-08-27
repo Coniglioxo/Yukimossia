@@ -652,11 +652,37 @@
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
+.chat-input-field {
+  position: relative;
+  min-width: 0;
+}
+
 .chat-input-bar .chat-input-textarea {
+  position: relative;
+  z-index: 0;
   width: 100%;
   border: 0.5px solid var(--c-input-border);
   border-radius: var(--ui-radius-card);
   background: color-mix(in srgb, var(--c-card) 60%, transparent);
+}
+
+.chat-input-placeholder {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  right: 16px;
+  bottom: 8px;
+  left: 16px;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 8px;
+  color: var(--c-icon);
+  font-size: calc(14.4px * var(--app-text-scale, 1));
+  line-height: 1.4;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .chat-theater-mode-strip {
