@@ -1325,6 +1325,30 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         `${session.id}:${offlineMode}:${isMultiSelectMode}:${showEmojiPanel}:${showStickerPanel}:${showPlusMenu}:${theaterMode}:${!!quotingMessage}`,
     );
 
+    // 固定聊天室容器高度为初始视口高度，防止键盘弹起时整个页面被推上去
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        
+        // 记录初始高度
+        const initialHeight = window.innerHeight;
+        wrapper.style.height = `${initialHeight}px`;
+        
+        // 监听 visualViewport 变化，但不改变容器高度
+        const handleViewportChange = () => {
+            // 容器高度保持不变，只有 fixed 定位的输入栏会跟随键盘移动
+        };
+        
+        window.visualViewport?.addEventListener('resize', handleViewportChange);
+        window.visualViewport?.addEventListener('scroll', handleViewportChange);
+        
+        return () => {
+            window.visualViewport?.removeEventListener('resize', handleViewportChange);
+            window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+            if (wrapper) wrapper.style.height = '';
+        };
+    }, []);
+
     const selectStoredMessageWindow = useCallback((allMsgs: ChatMessage[]) => {
         if (allMsgs.length <= INITIAL_LOAD) {
             return { nextMessages: allMsgs, nextHasMore: false };
