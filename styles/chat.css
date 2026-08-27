@@ -90,15 +90,15 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--chat-bottom-reserve, 120px);
   flex: none;
   min-height: 0;
   overflow-y: auto;
   padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px));
   padding-left: 16px;
   padding-right: 16px;
-  padding-bottom: var(--chat-bottom-reserve, 120px);
-  scroll-padding-bottom: calc(var(--chat-bottom-reserve, 120px) + 18px);
+  padding-bottom: 18px;
+  scroll-padding-bottom: 18px;
 }
 
 .chat-app .chat-room-wrapper > .page-body::after {
