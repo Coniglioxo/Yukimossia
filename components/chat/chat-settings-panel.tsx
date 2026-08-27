@@ -333,7 +333,8 @@ function BackgroundImageThumbnail({
             )}
             <button
                 type="button"
-                className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center transition-all hover:bg-black/70 active:scale-95"
+                style={{ zIndex: 10 }}
                 onClick={(e) => {
                     e.stopPropagation();
                     if (confirm("确定要删除这张背景图片吗？")) {
