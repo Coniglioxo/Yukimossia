@@ -1807,6 +1807,29 @@ export function ChatSettingsPanel({
                             <div className="font-bold text-[var(--c-text-title)]">聊天背景</div>
                             <div className="flex items-center gap-1.5">
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="上传图片" onClick={() => bgUploadInputRef.current?.click()}><Upload size={16} /></button>
+                                <button 
+                                    type="button" 
+                                    className="modal-header-btn modal-header-btn-muted" 
+                                    aria-label="清理孤儿文件" 
+                                    onClick={async () => {
+                                        if (!confirm("扫描并删除没有被引用的背景图片文件？\n\n这会释放被孤儿文件占用的存储空间。")) return;
+                                        try {
+                                            const { cleanOrphanBackgroundImages } = await import("@/lib/chat-background-storage");
+                                            const result = await cleanOrphanBackgroundImages();
+                                            if (result.errors.length > 0) {
+                                                alert(`清理完成！\n删除了 ${result.cleaned} 个孤儿文件\n\n部分文件清理失败：\n${result.errors.join("\n")}`);
+                                            } else if (result.cleaned > 0) {
+                                                alert(`清理完成！删除了 ${result.cleaned} 个孤儿文件，释放了存储空间。`);
+                                            } else {
+                                                alert("没有发现孤儿文件，存储空间干净！");
+                                            }
+                                        } catch (error) {
+                                            alert(`清理失败：${error}`);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowBackgroundDialog(false)}><X size={18} /></button>
                             </div>
                             <input ref={bgUploadInputRef} type="file" accept="*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
