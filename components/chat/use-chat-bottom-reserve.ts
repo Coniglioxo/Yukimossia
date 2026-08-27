@@ -63,8 +63,17 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
 
             if (reserveHeight > 0) {
                 wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${reserveHeight}px`);
+                // Debug: 同时更新 page-body 的 bottom
+                const pageBody = wrapper.querySelector('.page-body') as HTMLElement;
+                if (pageBody) {
+                    pageBody.style.bottom = `${reserveHeight}px`;
+                }
             } else {
                 wrapper.style.removeProperty(CHAT_BOTTOM_RESERVE_CSS_VAR);
+                const pageBody = wrapper.querySelector('.page-body') as HTMLElement;
+                if (pageBody) {
+                    pageBody.style.bottom = '';
+                }
             }
 
             if (wasNearBottom) scheduleStickToBottom();
