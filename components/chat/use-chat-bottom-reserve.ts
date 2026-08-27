@@ -50,17 +50,11 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
                 ? el.scrollHeight - el.scrollTop - el.clientHeight < STICK_TO_BOTTOM_THRESHOLD
                 : false;
             
-            // 使用 visualViewport 计算实际可用高度，让输入栏跟随键盘而不是推动整个页面
-            const visualHeight = window.visualViewport?.height || window.innerHeight;
-            const wrapperRect = wrapper.getBoundingClientRect();
+            // 只使用输入栏自身的高度，不再加上键盘偏移
             const overlayHeight = Math.ceil(overlay.getBoundingClientRect().height);
-            
-            // 如果 visualViewport 缩小（键盘弹起），计算输入栏相对于视口的底部偏移
-            const bottomOffset = Math.max(0, window.innerHeight - visualHeight);
-            const reserveHeight = overlayHeight + bottomOffset;
 
-            if (reserveHeight > 0) {
-                wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${reserveHeight}px`);
+            if (overlayHeight > 0) {
+                wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${overlayHeight}px`);
             } else {
                 wrapper.style.removeProperty(CHAT_BOTTOM_RESERVE_CSS_VAR);
             }
