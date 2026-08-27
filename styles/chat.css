@@ -9,6 +9,9 @@
   --chat-tabbar-content-height: 68px;
   --chat-tabbar-safe-bottom: env(safe-area-inset-bottom, 0px);
   --chat-tabbar-height: calc(var(--chat-tabbar-content-height) + var(--chat-tabbar-safe-bottom));
+  position: fixed !important;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .chat-app[data-room-active] {
@@ -30,6 +33,9 @@
   z-index: 30;
   background: #fff;
   isolation: isolate;
+  position: fixed !important;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .chat-settings-layer {
