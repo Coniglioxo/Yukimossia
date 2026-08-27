@@ -11,17 +11,34 @@ registerKvMigration(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
  */
 export function loadGlobalBackgroundImages(): string[] {
     const stored = kvGet(CHAT_BACKGROUND_IMAGES_KEY);
-    return Array.isArray(stored) ? stored : [];
+    if (!stored) return [];
+    try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
 }
 
 export function saveGlobalBackgroundImages(imageIds: string[]): void {
-    kvSet(CHAT_BACKGROUND_IMAGES_KEY, imageIds);
+    kvSet(CHAT_BACKGROUND_IMAGES_KEY, JSON.stringify(imageIds));
 }
 
 export function addGlobalBackgroundImage(imageId: string): void {
     const images = loadGlobalBackgroundImages();
+    console.log("[背景图片] 当前全局库:", images);
     if (!images.includes(imageId)) {
-        saveGlobalBackgroundImages([...images, imageId]);
+        const updated = [...images, imageId];
+        saveGlobalBackgroundImages(updated);
+        console.log("[背景图片] 添加图片:", imageId, "更新后:", updated);
+        // 立即验证保存结果
+        const verify = loadGlobalBackgroundImages();
+        console.log("[背景图片] 验证保存结果:", verify);
+        if (!verify.includes(imageId)) {
+            console.error("[背景图片] 保存失败！图片未出现在验证结果中");
+        }
+    } else {
+        console.log("[背景图片] 图片已存在，跳过添加:", imageId);
     }
 }
 
