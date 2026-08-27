@@ -360,6 +360,14 @@ export function ChatSettingsPanel({
     const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
     const bgUploadInputRef = useRef<HTMLInputElement | null>(null);
     const [globalBackgroundImages, setGlobalBackgroundImages] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (showBackgroundDialog) {
+            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages }) => {
+                setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            }).catch(() => {});
+        }
+    }, [showBackgroundDialog]);
     const [alias, setAlias] = useState<string>(session.alias || "");
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");

@@ -1,9 +1,7 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 
 const CHAT_BACKGROUND_IMAGES_KEY = "ai_phone_chat_background_images_v1";
-const CHAT_BACKGROUND_MIGRATION_FLAG_KEY = "ai_phone_chat_bg_migrated_v1";
 registerKvMigration(CHAT_BACKGROUND_IMAGES_KEY);
-registerKvMigration(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
 
 /**
  * 全局聊天背景图片库
@@ -11,66 +9,62 @@ registerKvMigration(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
  */
 export function loadGlobalBackgroundImages(): string[] {
     const stored = kvGet(CHAT_BACKGROUND_IMAGES_KEY);
-    return Array.isArray(stored) ? stored : [];
+    console.log("[背景图片] 读取原始值:", stored, "类型:", typeof stored);
+    
+    if (!stored) {
+        console.log("[背景图片] 无数据，返回空数组");
+        return [];
+    }
+    
+    try {
+        const parsed = JSON.parse(stored);
+        console.log("[背景图片] JSON解析结果:", parsed, "是否数组:", Array.isArray(parsed));
+        const result = Array.isArray(parsed) ? parsed : [];
+        console.log("[背景图片] 最终返回:", result);
+        return result;
+    } catch (e) {
+        console.error("[背景图片] JSON解析失败:", e);
+        return [];
+    }
 }
 
 export function saveGlobalBackgroundImages(imageIds: string[]): void {
-    kvSet(CHAT_BACKGROUND_IMAGES_KEY, imageIds);
+    const json = JSON.stringify(imageIds);
+    console.log("[背景图片] 保存数组:", imageIds);
+    console.log("[背景图片] JSON序列化:", json);
+    kvSet(CHAT_BACKGROUND_IMAGES_KEY, json);
+    console.log("[背景图片] kvSet 已调用");
+    
+    // 立即验证
+    setTimeout(() => {
+        const verify = kvGet(CHAT_BACKGROUND_IMAGES_KEY);
+        console.log("[背景图片] 验证读取:", verify);
+        if (verify !== json) {
+            console.error("[背景图片] 保存验证失败！期望:", json, "实际:", verify);
+        } else {
+            console.log("[背景图片] 保存验证成功！");
+        }
+    }, 100);
 }
 
 export function addGlobalBackgroundImage(imageId: string): void {
     const images = loadGlobalBackgroundImages();
+    console.log("[背景图片] 添加前的图片列表:", images);
+    
     if (!images.includes(imageId)) {
-        saveGlobalBackgroundImages([...images, imageId]);
+        const updated = [...images, imageId];
+        console.log("[背景图片] 添加图片:", imageId, "更新后列表:", updated);
+        saveGlobalBackgroundImages(updated);
+    } else {
+        console.log("[背景图片] 图片已存在，跳过:", imageId);
     }
 }
 
 export function removeGlobalBackgroundImage(imageId: string): void {
     const images = loadGlobalBackgroundImages();
-    saveGlobalBackgroundImages(images.filter(id => id !== imageId));
-}
-
-/**
- * 从所有会话迁移旧的背景图片到全局库
- * 避免旧图片变成孤儿文件占用空间
- * 使用标记确保只迁移一次
- */
-export function migrateSessionBackgroundsToGlobal(): void {
-    try {
-        // 检查是否已经迁移过
-        const migrated = kvGet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
-        if (migrated === "true") {
-            return; // 已迁移，跳过
-        }
-        
-        const sessions = require("./chat-storage").loadChatSessions() as Array<Record<string, unknown>>;
-        const allImageIds = new Set<string>();
-        
-        // 收集所有会话中的背景图片 ID
-        sessions.forEach(session => {
-            const oldImages = session.backgroundImages;
-            if (Array.isArray(oldImages)) {
-                oldImages.forEach(id => {
-                    if (typeof id === "string" && id) {
-                        allImageIds.add(id);
-                    }
-                });
-            }
-        });
-        
-        // 合并到全局库（保留已有的图片）
-        if (allImageIds.size > 0) {
-            const globalImages = loadGlobalBackgroundImages();
-            const merged = Array.from(new Set([...globalImages, ...Array.from(allImageIds)]));
-            saveGlobalBackgroundImages(merged);
-            console.log(`[背景图片迁移] 已迁移 ${allImageIds.size} 张图片到全局库`);
-        }
-        
-        // 标记已迁移
-        kvSet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY, "true");
-    } catch (error) {
-        console.error("[背景图片迁移] 迁移失败", error);
-    }
+    const updated = images.filter(id => id !== imageId);
+    console.log("[背景图片] 删除图片:", imageId, "更新后列表:", updated);
+    saveGlobalBackgroundImages(updated);
 }
 
 /**
