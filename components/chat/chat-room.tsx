@@ -1330,22 +1330,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
         
-        // 记录初始高度
+        // 记录初始高度并存储到全局，供 useChatBottomReserve 使用
         const initialHeight = window.innerHeight;
         wrapper.style.height = `${initialHeight}px`;
-        
-        // 监听 visualViewport 变化，但不改变容器高度
-        const handleViewportChange = () => {
-            // 容器高度保持不变，只有 fixed 定位的输入栏会跟随键盘移动
-        };
-        
-        window.visualViewport?.addEventListener('resize', handleViewportChange);
-        window.visualViewport?.addEventListener('scroll', handleViewportChange);
+        (window as any).__chatInitialHeight = initialHeight;
         
         return () => {
-            window.visualViewport?.removeEventListener('resize', handleViewportChange);
-            window.visualViewport?.removeEventListener('scroll', handleViewportChange);
             if (wrapper) wrapper.style.height = '';
+            delete (window as any).__chatInitialHeight;
         };
     }, []);
 

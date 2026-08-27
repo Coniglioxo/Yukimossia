@@ -54,9 +54,10 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
             const overlayRect = overlay.getBoundingClientRect();
             const overlayHeight = Math.ceil(overlayRect.height);
             
-            // visualViewport 缩小时说明键盘弹起了
+            // 使用初始记录的固定高度来计算键盘高度
+            const initialHeight = (window as any).__chatInitialHeight || window.innerHeight;
             const visualHeight = window.visualViewport?.height || window.innerHeight;
-            const keyboardHeight = Math.max(0, window.innerHeight - visualHeight);
+            const keyboardHeight = Math.max(0, initialHeight - visualHeight);
             
             // 总预留高度 = 输入栏高度 + 键盘高度
             const reserveHeight = overlayHeight + keyboardHeight;
@@ -70,7 +71,7 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
                 document.body.appendChild(debugEl);
             }
             debugEl.innerHTML = `
-                innerH: ${window.innerHeight}<br>
+                initH: ${initialHeight}<br>
                 visualH: ${visualHeight}<br>
                 keyboard: ${keyboardHeight}<br>
                 overlay: ${overlayHeight}<br>
@@ -79,7 +80,7 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
 
             if (reserveHeight > 0) {
                 wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${reserveHeight}px`);
-                // Debug: 同时更新 page-body 的 bottom
+                // 同时更新 page-body 的 bottom
                 const pageBody = wrapper.querySelector('.page-body') as HTMLElement;
                 if (pageBody) {
                     pageBody.style.bottom = `${reserveHeight}px`;
