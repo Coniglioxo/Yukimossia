@@ -39,7 +39,7 @@ export function migrateSessionBackgroundsToGlobal(): void {
     try {
         // 检查是否已经迁移过
         const migrated = kvGet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
-        if (migrated === true) {
+        if (migrated === "true") {
             return; // 已迁移，跳过
         }
         
@@ -67,7 +67,7 @@ export function migrateSessionBackgroundsToGlobal(): void {
         }
         
         // 标记已迁移
-        kvSet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY, true);
+        kvSet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY, "true");
     } catch (error) {
         console.error("[背景图片迁移] 迁移失败", error);
     }
