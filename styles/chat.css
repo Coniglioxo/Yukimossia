@@ -89,7 +89,7 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--chat-bottom-reserve, 120px);
   flex: none;
   min-height: 0;
   overflow-y: auto;
@@ -97,12 +97,12 @@
   padding-left: 16px;
   padding-right: 16px;
   padding-bottom: 18px;
-  scroll-padding-bottom: calc(var(--chat-bottom-reserve, 120px) + 18px);
+  scroll-padding-bottom: 18px;
 }
 
 .chat-app .chat-room-wrapper > .page-body::after {
   content: "";
-  flex: 0 0 var(--chat-bottom-reserve, 120px);
+  flex: 0 0 18px;
   width: 1px;
   min-height: 0;
   pointer-events: none;
@@ -640,7 +640,7 @@
 
 
 .chat-input-bar {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
@@ -1272,7 +1272,7 @@
 }
 
 .chat-multi-select-bar {
-  position: absolute;
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
