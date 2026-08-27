@@ -1,7 +1,9 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 
 const CHAT_BACKGROUND_IMAGES_KEY = "ai_phone_chat_background_images_v1";
+const CHAT_BACKGROUND_MIGRATION_FLAG_KEY = "ai_phone_chat_bg_migrated_v1";
 registerKvMigration(CHAT_BACKGROUND_IMAGES_KEY);
+registerKvMigration(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
 
 /**
  * 全局聊天背景图片库
@@ -31,9 +33,16 @@ export function removeGlobalBackgroundImage(imageId: string): void {
 /**
  * 从所有会话迁移旧的背景图片到全局库
  * 避免旧图片变成孤儿文件占用空间
+ * 使用标记确保只迁移一次
  */
 export function migrateSessionBackgroundsToGlobal(): void {
     try {
+        // 检查是否已经迁移过
+        const migrated = kvGet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY);
+        if (migrated === true) {
+            return; // 已迁移，跳过
+        }
+        
         const sessions = require("./chat-storage").loadChatSessions() as Array<Record<string, unknown>>;
         const allImageIds = new Set<string>();
         
@@ -49,13 +58,16 @@ export function migrateSessionBackgroundsToGlobal(): void {
             }
         });
         
-        // 合并到全局库
+        // 合并到全局库（保留已有的图片）
         if (allImageIds.size > 0) {
             const globalImages = loadGlobalBackgroundImages();
             const merged = Array.from(new Set([...globalImages, ...Array.from(allImageIds)]));
             saveGlobalBackgroundImages(merged);
             console.log(`[背景图片迁移] 已迁移 ${allImageIds.size} 张图片到全局库`);
         }
+        
+        // 标记已迁移
+        kvSet(CHAT_BACKGROUND_MIGRATION_FLAG_KEY, true);
     } catch (error) {
         console.error("[背景图片迁移] 迁移失败", error);
     }
