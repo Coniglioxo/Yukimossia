@@ -62,22 +62,6 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
             // 总预留高度 = 输入栏高度 + 键盘高度
             const reserveHeight = overlayHeight + keyboardHeight;
 
-            // 调试信息显示
-            let debugEl = document.getElementById('chat-debug-info');
-            if (!debugEl) {
-                debugEl = document.createElement('div');
-                debugEl.id = 'chat-debug-info';
-                debugEl.style.cssText = 'position:fixed;top:80px;right:10px;background:rgba(0,0,0,0.8);color:#0f0;padding:8px;font-size:11px;z-index:9999;border-radius:4px;font-family:monospace;';
-                document.body.appendChild(debugEl);
-            }
-            debugEl.innerHTML = `
-                initH: ${initialHeight}<br>
-                visualH: ${visualHeight}<br>
-                keyboard: ${keyboardHeight}<br>
-                overlay: ${overlayHeight}<br>
-                reserve: ${reserveHeight}
-            `;
-
             if (reserveHeight > 0) {
                 wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${reserveHeight}px`);
                 // 同时更新 page-body 的 bottom
