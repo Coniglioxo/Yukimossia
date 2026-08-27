@@ -49,6 +49,13 @@
 .chat-app .chat-room-wrapper.page-shell {
   overflow: hidden;
   --chat-bottom-reserve: 120px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .chat-app .chat-room-wrapper .page-header {
