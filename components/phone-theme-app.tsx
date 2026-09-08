@@ -846,27 +846,39 @@ function TextScalePage({
     onApply(next);
   };
   const handleFontClear = useCallback(async () => {
-    const assetId = draft.fontAssetId;
     const { "--app-font-family": _fontOverride, ...cssOverrides } = draft.cssOverrides;
     const next = normalizeThemeProfile({ ...draft, fontAssetId: null, cssOverrides });
-    let cleanupFailed = false;
+    onDraftChange(next);
+    await onApply(next);
+    onNotice("已恢复默认字体");
+  }, [draft, onDraftChange, onApply, onNotice]);
+
+  const handleFontSelect = useCallback(async (assetId: string) => {
+    const { "--app-font-family": _fontOverride, ...cssOverrides } = draft.cssOverrides;
+    const next = normalizeThemeProfile({ ...draft, fontAssetId: assetId, cssOverrides });
+    onDraftChange(next);
+    await onApply(next);
+  }, [draft, onDraftChange, onApply]);
+
+  const handleFontDelete = useCallback(async (assetId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      if (assetId) {
-        try {
-          await deleteThemeAsset(assetId);
-        } catch (err) {
-          cleanupFailed = true;
-          console.warn("[Font] asset cleanup failed:", err);
-        }
-      }
+      await deleteThemeAsset(assetId);
+      const newLibrary = draft.fontLibrary.filter(f => f.id !== assetId);
+      const next = normalizeThemeProfile({
+        ...draft,
+        fontLibrary: newLibrary,
+        fontAssetId: draft.fontAssetId === assetId ? null : draft.fontAssetId
+      });
       onDraftChange(next);
       await onApply(next);
-      onNotice(cleanupFailed ? "已清除上传字体，资源稍后可再清理" : "已清除上传字体");
+      onNotice("已删除字体");
     } catch (err) {
-      console.error("[Font] clear failed:", err);
-      onNotice("清除失败：" + String(err));
+      console.error("[Font] delete failed:", err);
+      onNotice("删除失败：" + String(err));
     }
   }, [draft, onDraftChange, onApply, onNotice]);
+
   const handleFontUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -876,8 +888,12 @@ function TextScalePage({
       const assetId = await saveThemeAssetFromBlob(file, "font");
       console.log("[Font] saved assetId:", assetId);
       const { "--app-font-family": _fontOverride, ...cssOverrides } = draft.cssOverrides;
-      const next = normalizeThemeProfile({ ...draft, fontAssetId: assetId, fontFamily: draft.fontFamily, cssOverrides });
-      console.log("[Font] applying theme, fontAssetId:", next.fontAssetId, "fontFamily:", next.fontFamily);
+      const next = normalizeThemeProfile({
+        ...draft,
+        fontAssetId: assetId,
+        fontLibrary: [...draft.fontLibrary, { id: assetId, name: file.name }],
+        cssOverrides
+      });
       onDraftChange(next);
       await onApply(next);
       onNotice("字体已上传：" + file.name);
@@ -886,6 +902,7 @@ function TextScalePage({
       onNotice("上传失败：" + String(err));
     }
   }, [draft, onDraftChange, onApply, onNotice]);
+
   return (
     <div className="theme-section-page" style={{ padding: compact ? 0 : "16px 28px 24px" }}>
       {/* 文字缩放 */}
@@ -907,20 +924,35 @@ function TextScalePage({
 
       {/* 字体选择 */}
       <div className="mt-4">
-        <p className="ts-13 font-medium mb-8" style={{ color: "var(--c-text-title)" }}>{"字体"}</p>
-        {draft.fontAssetId && (
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              className="inline-flex h-8 items-center justify-center gap-1 rounded-full border border-black/10 bg-white/70 px-3 ts-11 font-medium text-[var(--c-text)] shadow-sm transition-all hover:bg-white active:scale-95 focus:outline-none"
-              onClick={handleFontClear}
-              title="清除上传字体"
-            >
-              <RotateCcw size={12} strokeWidth={1.8} />
-              <span>清除字体</span>
-            </button>
+        <p className="ts-13 font-medium mb-4" style={{ color: "var(--c-text-title)" }}>{"字体"}</p>
+        <div className="flex flex-col gap-2 mb-4">
+          <div 
+            className={`flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-colors ${!draft.fontAssetId ? 'bg-black/5' : 'bg-transparent hover:bg-black/5'}`}
+            onClick={handleFontClear}
+          >
+            <span className="ts-13 font-medium text-[var(--c-text-title)]">默认字体</span>
+            {!draft.fontAssetId && <div className="w-2 h-2 rounded-full bg-[var(--c-success)]" />}
           </div>
-        )}
+          {draft.fontLibrary.map(font => (
+            <div 
+              key={font.id}
+              className={`flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-colors ${draft.fontAssetId === font.id ? 'bg-black/5' : 'bg-transparent hover:bg-black/5'}`}
+              onClick={() => handleFontSelect(font.id)}
+            >
+              <span className="ts-13 font-medium text-[var(--c-text-title)] truncate pr-4">{font.name}</span>
+              <div className="flex items-center gap-3">
+                {draft.fontAssetId === font.id && <div className="w-2 h-2 rounded-full bg-[var(--c-success)]" />}
+                <button
+                  type="button"
+                  className="text-[var(--c-danger)] p-1 hover:bg-black/5 rounded-full transition-colors"
+                  onClick={(e) => handleFontDelete(font.id, e)}
+                >
+                  <AlertCircle size={16} strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
         <div className="my-3">
           <button
             type="button"

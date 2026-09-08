@@ -47,6 +47,7 @@ export type ThemeProfile = {
   // 排版
   fontAssetId: string | null;
   fontFamily: string;
+  fontLibrary: Array<{ id: string; name: string }>;
   // 手机外观
   hideTopBar: boolean;
   // 移动端：手机画面整体上移的像素数，用于裁掉顶部状态栏占位、把底部栏顶回可视区。
@@ -178,6 +179,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   dockSkinAssetId: null,
   fontAssetId: null,
   fontFamily: DEFAULT_FONT_FAMILY,
+  fontLibrary: [],
   hideTopBar: true,
   statusBarDropPx: 0,
   cssOverrides: {},
@@ -322,6 +324,10 @@ export function normalizeThemeProfile(raw: unknown): ThemeProfile {
   base.fontFamily = typeof source.fontFamily === "string" && (source.fontFamily as string).trim()
     ? (source.fontFamily as string).trim()
     : DEFAULT_FONT_FAMILY;
+
+  base.fontLibrary = Array.isArray(source.fontLibrary)
+    ? source.fontLibrary.filter((item: any) => item && typeof item.id === "string" && typeof item.name === "string")
+    : [];
 
   // ── Display ──
   base.hideTopBar = typeof source.hideTopBar === "boolean" ? source.hideTopBar : base.hideTopBar;
