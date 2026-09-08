@@ -246,7 +246,7 @@ export function MomentsCompose({ onClose, onPublished }: Props) {
                             style={{ display: 'none' }} // Assuming mostly image flows for real, hidden to keep UI clean unless needed
                         />
                     )}
-                    <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                    <input ref={fileRef} type="file" accept="*" onChange={handleFileChange} className="hidden" />
                 </div>
 
                 {/* ── Action Rows (Location, Mention, Visibility) ── */}

@@ -57,6 +57,12 @@ export type ChatSession = {
     offlineBilingualTranslationPrompt?: string;
     nativeExpandedToolSourceIds?: string[];
     visionImagePromptLimit?: number;
+    developerModeEnabled?: boolean; // 允许角色读取源码的开发者模式
+    developerGithubUsername?: string;
+    developerGithubRepo?: string;
+    developerGithubPat?: string;
+    developerGithubBranch?: string;
+    developerCommitMode?: "confirm" | "direct";
     /** 流式生成（线上）：开启后该会话的线上 AI 回复边生成边显示（默认关，保持原整段请求行为） */
     streamOnline?: boolean;
     /** 流式生成（线下）：开启后该会话的线下 AI 回复边生成边显示（默认关，保持原整段请求行为） */
@@ -205,6 +211,7 @@ export type ChatMessage = {
         memoryRequestStatus?: "pending" | "approved" | "ignored";
         fileType?: "audio" | "image" | "video" | "file";
         fileName?: string;
+        fileSummary?: string;
         fileDuration?: number;
         useReferenceImage?: boolean; // AI photo tag: whether to send the character reference image to the generator
         imageGenerationMediaRef?: string;

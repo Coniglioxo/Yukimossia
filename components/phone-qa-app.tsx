@@ -1206,17 +1206,27 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
               }}
             />
             {visionEnabled && (
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                onChange={(event) => {
-                  handlePickImages(event.target.files, "composer");
-                  event.currentTarget.value = "";
-                }}
-              />
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="*"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    handlePickImages(event.target.files, "composer");
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  className="qa-circle-btn qa-attach-btn"
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label="发送图片"
+                >
+                  <Plus size={17} strokeWidth={2.2} />
+                </button>
+              </>
             )}
             <div className="qa-attach-menu-wrap">
               <button

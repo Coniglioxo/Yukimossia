@@ -15,11 +15,12 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
 
 export const metadata: Metadata = {
-  title: "float",
-  description: "float",
+  title: "小苍兰",
+  description: "小苍兰",
 };
 
 export default function RootLayout({
@@ -35,7 +36,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="icon" href="/icon-192.png" type="image/png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="float" />
+        <meta name="apple-mobile-web-app-title" content="小苍兰" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>

@@ -16,6 +16,8 @@ import {
     removeChatContact,
     normalizeVisionImagePromptLimit,
     MAX_VISION_IMAGE_PROMPT_LIMIT,
+    upsertImportedChatMessage,
+    reindexSessionMessageOrdersByTime,
     type ChatMessage,
 } from "@/lib/chat-storage";
 import {
@@ -283,6 +285,71 @@ function ChatInfoIcon({ icon: Icon, color }: { icon: LucideIcon; color: string }
     );
 }
 
+function BackgroundImageThumbnail({
+    imgId,
+    isSelected,
+    onSelect,
+    onDelete,
+}: {
+    imgId: string;
+    isSelected: boolean;
+    onSelect: (id: string) => void;
+    onDelete: (id: string) => void;
+}) {
+    const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        import("@/lib/chat-asset-storage").then(({ getChatImageFromIndexedDB }) => {
+            getChatImageFromIndexedDB(imgId).then(url => {
+                if (url) setDataUrl(url);
+            }).catch(() => {});
+        }).catch(() => {});
+    }, [imgId]);
+
+    return (
+        <div
+            className="relative aspect-[3/4] rounded-xl overflow-hidden cursor-pointer border-2 transition-all"
+            style={{
+                borderColor: isSelected ? "var(--c-primary)" : "transparent",
+                background: "color-mix(in srgb, var(--c-text) 6%, transparent)"
+            }}
+            onClick={() => onSelect(imgId)}
+        >
+            {dataUrl ? (
+                <img
+                    src={dataUrl}
+                    alt="背景图片"
+                    className="w-full h-full object-cover"
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon size={32} className="opacity-20" />
+                </div>
+            )}
+            {isSelected && (
+                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--c-primary)] flex items-center justify-center">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M11.6667 3.5L5.25 9.91667L2.33333 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </div>
+            )}
+            <button
+                type="button"
+                className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center transition-all hover:bg-black/70 active:scale-95"
+                style={{ zIndex: 10 }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm("确定要删除这张背景图片吗？")) {
+                        onDelete(imgId);
+                    }
+                }}
+            >
+                <Trash2 size={14} className="text-white" />
+            </button>
+        </div>
+    );
+}
+
 export function ChatSettingsPanel({
     session,
     onClose,
@@ -294,6 +361,17 @@ export function ChatSettingsPanel({
     offlineHistoryBusy = false,
 }: ChatSettingsPanelProps) {
     const [backgroundImage, setBackgroundImage] = useState<string>(session.backgroundImage || "");
+    const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
+    const bgUploadInputRef = useRef<HTMLInputElement | null>(null);
+    const [globalBackgroundImages, setGlobalBackgroundImages] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (showBackgroundDialog) {
+            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages }) => {
+                setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            }).catch(() => {});
+        }
+    }, [showBackgroundDialog]);
     const [alias, setAlias] = useState<string>(session.alias || "");
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
@@ -388,6 +466,13 @@ export function ChatSettingsPanel({
         setPreviewHtml("");
         setShowStatusRegionDialog(true);
     };
+    const [developerModeEnabled, setDeveloperModeEnabled] = useState(session.developerModeEnabled === true);
+    const [showDeveloperDialog, setShowDeveloperDialog] = useState(false);
+    const [devUsername, setDevUsername] = useState(session.developerGithubUsername || "");
+    const [devRepo, setDevRepo] = useState(session.developerGithubRepo || "");
+    const [devPat, setDevPat] = useState(session.developerGithubPat || "");
+    const [devBranch, setDevBranch] = useState(session.developerGithubBranch || "");
+    const [devCommitMode, setDevCommitMode] = useState(session.developerCommitMode || "confirm");
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [offlineSummaryRetry, setOfflineSummaryRetry] = useState(session.offlineSummaryRetry !== false);
@@ -695,6 +780,70 @@ export function ChatSettingsPanel({
             console.error("Failed to save image", error);
             alert("图片保存失败，请重试");
         }
+    };
+
+    useEffect(() => {
+        if (showBackgroundDialog) {
+            import("@/lib/chat-background-storage").then(({ loadGlobalBackgroundImages, migrateSessionBackgroundsToGlobal }) => {
+                // 首次打开弹窗时自动迁移旧数据
+                migrateSessionBackgroundsToGlobal();
+                setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            }).catch(() => {});
+        }
+    }, [showBackgroundDialog]);
+
+    const handleBackgroundImageUpload = async (file: File) => {
+        try {
+            const { saveChatImageToIndexedDB } = await import("@/lib/chat-asset-storage");
+            const { addGlobalBackgroundImage, loadGlobalBackgroundImages } = await import("@/lib/chat-background-storage");
+            const id = await saveChatImageToIndexedDB(file);
+            addGlobalBackgroundImage(id);
+            setGlobalBackgroundImages(loadGlobalBackgroundImages());
+        } catch (error) {
+            console.error("Failed to save background image", error);
+            alert("图片保存失败，请重试");
+        }
+    };
+
+    const selectBackgroundImage = (id: string) => {
+        setBackgroundImage(id);
+        updateSession({ backgroundImage: id });
+    };
+
+    const deleteBackgroundImage = async (id: string) => {
+        try {
+            const { removeGlobalBackgroundImage, loadGlobalBackgroundImages } = await import("@/lib/chat-background-storage");
+            removeGlobalBackgroundImage(id);
+            setGlobalBackgroundImages(loadGlobalBackgroundImages());
+            
+            // 如果删除的是当前使用的背景，清除所有会话中的该背景
+            if (backgroundImage === id) {
+                setBackgroundImage("");
+                updateSession({ backgroundImage: "" });
+            }
+            
+            // 可选：清理其他会话中使用该背景的引用
+            const sessions = loadChatSessions();
+            let needUpdate = false;
+            const updated = sessions.map(s => {
+                if (s.backgroundImage === id) {
+                    needUpdate = true;
+                    return { ...s, backgroundImage: "" };
+                }
+                return s;
+            });
+            if (needUpdate) {
+                saveChatSessions(updated);
+            }
+        } catch (error) {
+            console.error("Failed to delete background image", error);
+            alert("删除失败，请重试");
+        }
+    };
+
+    const resetBackgroundToDefault = () => {
+        setBackgroundImage("");
+        updateSession({ backgroundImage: "" });
     };
 
     // Group video: per-participant background upload
@@ -1155,15 +1304,14 @@ export function ChatSettingsPanel({
 
                 {/* Backgrounds & UI */}
                 <div className="menu-group">
-                    <label className="menu-item">
+                    <button className="menu-item" onClick={() => setShowBackgroundDialog(true)}>
                         <ChatInfoIcon icon={ImageIcon} color={BINDING_ACCENTS.api} />
                         <div className="menu-label-group"><span className="menu-label">聊天背景</span></div>
                         <div className="menu-right">
-                            {backgroundImage && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setBackgroundImage(""); updateSession({ backgroundImage: "" }); }}>清除</button></>}
+                            {backgroundImage && <span className="menu-desc mr-1">已设置</span>}
                             <ChevronRight size={16} />
                         </div>
-                        <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setBackgroundImage, "backgroundImage")} className="hidden" />
-                    </label>
+                    </button>
                     {session.isGroup ? (
                         <>
                             <div className="menu-item" style={{ cursor: "default" }}>
@@ -1180,7 +1328,7 @@ export function ChatSettingsPanel({
                                         {groupVideoBgs[c.id] && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); const updated = { ...groupVideoBgs }; delete updated[c.id]; setGroupVideoBgs(updated); updateSession({ groupVideoBackgrounds: updated }); }}>清除</button></>}
                                         <ChevronRight size={14} />
                                     </div>
-                                    <input type="file" accept="image/*" onChange={e => handleGroupVideoBgUpload(e, c.id)} className="hidden" />
+                                    <input type="file" accept="*" onChange={e => handleGroupVideoBgUpload(e, c.id)} className="hidden" />
                                 </label>
                             ))}
                             <label className="menu-item" style={{ paddingLeft: 72 }}>
@@ -1196,7 +1344,7 @@ export function ChatSettingsPanel({
                                     {groupVideoBgs["self"] && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); const updated = { ...groupVideoBgs }; delete updated["self"]; setGroupVideoBgs(updated); updateSession({ groupVideoBackgrounds: updated }); }}>清除</button></>}
                                     <ChevronRight size={14} />
                                 </div>
-                                <input type="file" accept="image/*" onChange={e => handleGroupVideoBgUpload(e, "self")} className="hidden" />
+                                <input type="file" accept="*" onChange={e => handleGroupVideoBgUpload(e, "self")} className="hidden" />
                             </label>
                         </>
                     ) : (
@@ -1207,7 +1355,7 @@ export function ChatSettingsPanel({
                                 {videoBackground && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setVideoBackground(""); updateSession({ videoBackground: "" }); }}>清除</button></>}
                                 <ChevronRight size={16} />
                             </div>
-                            <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setVideoBackground, "videoBackground")} className="hidden" />
+                            <input type="file" accept="*" onChange={e => handleImageUpload(e, setVideoBackground, "videoBackground")} className="hidden" />
                         </label>
                     )}
                     <label className="menu-item">
@@ -1217,12 +1365,33 @@ export function ChatSettingsPanel({
                             {voiceBackground && <><span className="menu-desc mr-1">已设置</span><button className="menu-desc mr-1 text-[var(--c-danger)]" onClick={e => { e.preventDefault(); setVoiceBackground(""); updateSession({ voiceBackground: "" }); }}>清除</button></>}
                             <ChevronRight size={16} />
                         </div>
-                        <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setVoiceBackground, "voiceBackground")} className="hidden" />
+                        <input type="file" accept="*" onChange={e => handleImageUpload(e, setVoiceBackground, "voiceBackground")} className="hidden" />
                     </label>
                 </div>
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    {!session.isGroup && (
+                        <>
+                            <div className="menu-item cursor-pointer" onClick={() => developerModeEnabled && setShowDeveloperDialog(true)}>
+                                <ChatInfoIcon icon={Code} color="var(--c-danger)" />
+                                <div className="menu-label-group">
+                                    <span className="menu-label menu-label-danger">开发者权限（危险）</span>
+                                    <span className="menu-desc">{developerModeEnabled ? "已启用——点此配置 GitHub 授权" : "允许 TA 读写你的 GitHub 仓库代码"}</span>
+                                </div>
+                                <div className="menu-right" onClick={e => e.stopPropagation()}>
+                                    <Toggle
+                                        checked={developerModeEnabled}
+                                        onChange={c => {
+                                            setDeveloperModeEnabled(c);
+                                            updateSession({ developerModeEnabled: c });
+                                            if (c) setShowDeveloperDialog(true);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
                     <KeyboardAutoSendDebounceItem sessionId={session.id} />
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
@@ -1232,6 +1401,88 @@ export function ChatSettingsPanel({
                             <ChevronRight size={16} />
                         </div>
                     </button>
+                </div>
+
+                {/* Export/Import History */}
+                <div className="menu-group">
+                    <button className="menu-item" onClick={() => {
+                        try {
+                            const messages = loadChatMessages(session.id);
+                            const payload = {
+                                type: "ai-phone-chat-history",
+                                version: 1,
+                                sessionId: session.id,
+                                contactId: session.contactId,
+                                isGroup: session.isGroup || false,
+                                exportedAt: new Date().toISOString(),
+                                messageCount: messages.length,
+                                messages,
+                            };
+                            const fileName = session.isGroup
+                                ? `聊天记录-${groupName || "群聊"}-${new Date().toLocaleDateString()}.json`
+                                : `聊天记录-${characterName}-${new Date().toLocaleDateString()}.json`;
+                            void downloadFile(
+                                new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+                                fileName
+                            );
+                        } catch (error) {
+                            console.error("导出失败", error);
+                            alert("导出聊天记录失败，请重试");
+                        }
+                    }}>
+                        <ChatInfoIcon icon={Download} color={BINDING_ACCENTS.api} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导出聊天记录</span>
+                            <span className="menu-desc">导出为 JSON 文件备份</span>
+                        </div>
+                    </button>
+                    <label className="menu-item">
+                        <ChatInfoIcon icon={Upload} color={BINDING_ACCENTS.voice} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导入聊天记录</span>
+                            <span className="menu-desc">从 JSON 文件恢复聊天记录</span>
+                        </div>
+                        <input
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    try {
+                                        const parsed = JSON.parse(String(reader.result || "")) as Record<string, unknown>;
+                                        if (parsed.type !== "ai-phone-chat-history") {
+                                            alert("不是有效的聊天记录文件");
+                                            return;
+                                        }
+                                        const messages = parsed.messages;
+                                        if (!Array.isArray(messages)) {
+                                            alert("聊天记录格式错误");
+                                            return;
+                                        }
+                                        let imported = 0;
+                                        let skipped = 0;
+                                        for (const msg of messages) {
+                                            if (typeof msg === "object" && msg !== null && "id" in msg) {
+                                                const result = upsertImportedChatMessage(msg as ChatMessage);
+                                                if (result.inserted) imported++;
+                                                else skipped++;
+                                            }
+                                        }
+                                        reindexSessionMessageOrdersByTime(session.id);
+                                        alert(`导入完成：新增 ${imported} 条消息${skipped > 0 ? `，跳过 ${skipped} 条已存在的消息` : ""}`);
+                                    } catch (error) {
+                                        console.error("导入失败", error);
+                                        alert("导入聊天记录失败：文件格式错误");
+                                    }
+                                };
+                                reader.readAsText(file);
+                                e.target.value = "";
+                            }}
+                        />
+                    </label>
                 </div>
 
                 {/* Destructive Actions */}
@@ -1656,6 +1907,92 @@ export function ChatSettingsPanel({
                 </div>
                 </div>
             )}
+            {/* Modal: Background Images Manager */}
+            {showBackgroundDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="聊天背景管理">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold text-[var(--c-text-title)]">聊天背景</div>
+                            <div className="flex items-center gap-1.5">
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="上传图片" onClick={() => bgUploadInputRef.current?.click()}><Upload size={16} /></button>
+                                <button 
+                                    type="button" 
+                                    className="modal-header-btn modal-header-btn-muted" 
+                                    aria-label="清理孤儿文件" 
+                                    onClick={async () => {
+                                        if (!confirm("扫描并删除没有被引用的背景图片文件？\n\n这会释放被孤儿文件占用的存储空间。")) return;
+                                        try {
+                                            const { cleanOrphanBackgroundImages } = await import("@/lib/chat-background-storage");
+                                            const result = await cleanOrphanBackgroundImages();
+                                            if (result.errors.length > 0) {
+                                                alert(`清理完成！\n删除了 ${result.cleaned} 个孤儿文件\n\n部分文件清理失败：\n${result.errors.join("\n")}`);
+                                            } else if (result.cleaned > 0) {
+                                                alert(`清理完成！删除了 ${result.cleaned} 个孤儿文件，释放了存储空间。`);
+                                            } else {
+                                                alert("没有发现孤儿文件，存储空间干净！");
+                                            }
+                                        } catch (error) {
+                                            alert(`清理失败：${error}`);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowBackgroundDialog(false)}><X size={18} /></button>
+                            </div>
+                            <input ref={bgUploadInputRef} type="file" accept="*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { handleBackgroundImageUpload(f); } e.target.value = ""; }} />
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-5 pb-4">
+                            {globalBackgroundImages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                    <ImageIcon size={48} className="opacity-20 mb-3" />
+                                    <div className="ts-13 opacity-45">还没有上传背景图片</div>
+                                    <div className="ts-11 opacity-30 mt-1">图片库全局共享，所有角色通用</div>
+                                    <button
+                                        type="button"
+                                        className="ui-btn ui-btn-ghost mt-4"
+                                        onClick={() => bgUploadInputRef.current?.click()}
+                                    >
+                                        上传图片
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {globalBackgroundImages.map(imgId => (
+                                        <BackgroundImageThumbnail
+                                            key={imgId}
+                                            imgId={imgId}
+                                            isSelected={backgroundImage === imgId}
+                                            onSelect={selectBackgroundImage}
+                                            onDelete={deleteBackgroundImage}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex gap-2 px-5 pb-4 pt-1 border-t border-[var(--c-border)]">
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-outline flex-1"
+                                onClick={() => {
+                                    resetBackgroundToDefault();
+                                    setShowBackgroundDialog(false);
+                                }}
+                            >
+                                恢复默认
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-primary flex-1"
+                                onClick={() => setShowBackgroundDialog(false)}
+                            >
+                                完成
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showStatusRegionDialog && (
                 <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="自定义状态栏">
                     <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
@@ -1763,6 +2100,99 @@ export function ChatSettingsPanel({
                                 }}
                             >
                                 保存并启用
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Developer Settings */}
+            {showDeveloperDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold text-[var(--c-text-title)] text-[var(--c-danger)]">GitHub 开发者授权</div>
+                            <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowDeveloperDialog(false)}><X size={18} /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-3">
+                            <p className="ts-12 text-[var(--c-subtext)] leading-relaxed mb-1">
+                                此功能将允许 AI 角色直接读取并修改你的 GitHub 仓库代码。请确保你信任该模型，并仅在你拥有写权限的仓库中使用。
+                            </p>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">GitHub 用户名</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Coniglioxo"
+                                    value={devUsername}
+                                    onChange={e => setDevUsername(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">仓库名称</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="例如：Yukimossia"
+                                    value={devRepo}
+                                    onChange={e => setDevRepo(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">访问令牌 (PAT)</label>
+                                <input
+                                    type="password"
+                                    className="ui-input ts-13"
+                                    placeholder="需要 repo 权限，用于读取私有库与提交代码"
+                                    value={devPat}
+                                    onChange={e => setDevPat(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">目标分支</label>
+                                <input
+                                    type="text"
+                                    className="ui-input ts-13"
+                                    placeholder="留空默认为 main"
+                                    value={devBranch}
+                                    onChange={e => setDevBranch(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 mt-1">
+                                <label className="ts-12 font-semibold text-[var(--c-text-title)]">代码提交模式</label>
+                                <select
+                                    className="ui-input ts-13"
+                                    value={devCommitMode}
+                                    onChange={e => setDevCommitMode(e.target.value as "confirm" | "direct")}
+                                >
+                                    <option value="confirm">提交前需要我在界面确认 (安全)</option>
+                                    <option value="direct">直接提交并推送到仓库 (危险)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[var(--c-border)] p-4 bg-[var(--c-soft-bg)]">
+                            <button 
+                                type="button" 
+                                className="ui-btn ui-btn-ghost flex-1"
+                                onClick={() => setShowDeveloperDialog(false)}
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-danger flex-1"
+                                onClick={() => {
+                                    updateSession({
+                                        developerGithubUsername: devUsername,
+                                        developerGithubRepo: devRepo,
+                                        developerGithubPat: devPat,
+                                        developerGithubBranch: devBranch,
+                                        developerCommitMode: devCommitMode
+                                    });
+                                    setShowDeveloperDialog(false);
+                                }}
+                            >
+                                保存配置
                             </button>
                         </div>
                     </div>

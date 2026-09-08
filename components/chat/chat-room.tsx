@@ -9,8 +9,8 @@ import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-pars
 import { isKnownStickerLabel } from "@/lib/sticker-data";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
+import { PhotoInputModal, TextPhotoModal, TextFileInputModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal, type ChatTextFileSelection } from "./rich-input-modals";
 import { GeneratedImageErrorDialog } from "./generated-image-error-dialog";
-import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
@@ -88,6 +88,7 @@ import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
 import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
+import { storeMediaBlob } from "@/lib/media-cache-storage";
 
 // ── Call system message detection ──────────────────────────
 // Call messages are stored with user/assistant role for correct prompt alternation,
@@ -487,7 +488,7 @@ type PendingMessageJump = {
 };
 
 const TRANSIENT_MESSAGE_PREFIX = "ui-transient-";
-type RichModalKind = "photo" | "text_photo" | "red_packet" | "transfer" | "location" | "transfer_target" | "voice_msg" | "gift" | "system_instruction";
+type RichModalKind = "photo" | "text_photo" | "file" | "red_packet" | "transfer" | "location" | "transfer_target" | "voice_msg" | "gift" | "system_instruction";
 type ChatTextInputHandle = {
     appendText: (text: string, options?: { focus?: boolean }) => void;
     clear: () => void;
@@ -608,11 +609,13 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     theaterMode: boolean;
     enterToSendEnabled: boolean;
     quotingMessage: ChatMessage | null;
+    sendAsCharacter: boolean;
     showEmojiPanel: boolean;
     showStickerPanel: boolean;
     showPlusMenu: boolean;
     customPlusActions: RegisteredCustomAppChatPlusAction[];
     onClearQuote: () => void;
+    onToggleSendAsCharacter: () => void;
     onToggleOfflineMode: () => void;
     onClosePanels: () => void;
     onToggleEmojiPanel: () => void;
@@ -639,11 +642,13 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     theaterMode,
     enterToSendEnabled,
     quotingMessage,
+    sendAsCharacter,
     showEmojiPanel,
     showStickerPanel,
     showPlusMenu,
     customPlusActions,
     onClearQuote,
+    onToggleSendAsCharacter,
     onToggleOfflineMode,
     onClosePanels,
     onToggleEmojiPanel,
@@ -718,8 +723,10 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     );
     const suggestEnabled = !inputLocked && !panelOpen && !suggestClosed && inputText.trim().length > 0;
     const plusMenuItems = [
+        ...(!isGroup ? [{ icon: <User size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "角色身份", onClick: () => { onToggleSendAsCharacter(); onClosePanels(); } }] : []),
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>, label: "照片墙", onClick: () => onOpenRichModal("photo") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="14" y2="12" /><line x1="7" y1="16" x2="11" y2="16" /></svg>, label: "文字图片", onClick: () => onOpenRichModal("text_photo") },
+        { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>, label: "文件", onClick: () => onOpenRichModal("file") },
         { icon: <AlertCircle size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "系统指令", onClick: () => onOpenRichModal("system_instruction") },
         { icon: <Clapperboard size={22} strokeWidth={1.5} color={theaterMode ? "var(--c-icon-active)" : "var(--c-text)"} />, label: "番外指令模式", active: theaterMode, onClick: onToggleTheaterMode },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>, label: "视频通话", onClick: onStartVideoCall },
@@ -765,6 +772,14 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                     <button onClick={onClearQuote} className="ui-bare-btn text-[var(--c-icon)] ts-16 leading-none p-[2px]">✕</button>
                 </div>
             )}
+            {sendAsCharacter && !isGroup && (
+                <div className="chat-quote-bar">
+                    <div className="flex-1 ts-12 text-[var(--c-icon)] overflow-hidden text-ellipsis whitespace-nowrap">
+                        以角色身份发送: {characterName}
+                    </div>
+                    <button onClick={onToggleSendAsCharacter} className="ui-bare-btn text-[var(--c-icon)] ts-16 leading-none p-[2px]">✕</button>
+                </div>
+            )}
 
             {suggestEnabled && (
                 <StickerSearchSuggest
@@ -778,43 +793,48 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                     onClose={() => setSuggestClosed(true)}
                 />
             )}
-            <textarea
-                ref={textareaRef}
-                rows={1}
-                value={inputText}
-                onChange={e => {
-                    setInputText(e.target.value);
-                    setSuggestClosed(false);
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-                }}
-                onFocus={(e) => {
-                    if (panelOpen) {
-                        e.target.blur();
-                        onClosePanels();
-                        const target = e.target as HTMLTextAreaElement;
-                        requestAnimationFrame(() => requestAnimationFrame(() => target.focus()));
-                    }
-                    setSuggestClosed(false);
-                }}
-                onBlur={() => setSuggestClosed(true)}
-                onKeyDown={e => {
-                    if (e.key === "Escape") {
-                        setSuggestClosed(true);
-                        return;
-                    }
-                    if (shouldSendChatInputOnEnter(e, enterToSendEnabled)) {
-                        e.preventDefault();
-                        handleSubmit();
-                    }
-                }}
-                enterKeyHint={enterToSendEnabled ? "send" : "enter"}
-                className="chat-input-textarea"
-                disabled={inputLocked}
-                placeholder={inputLocked
-                    ? (isSpectator ? "围观中，你不在这个群里" : `禁言中，剩余${Math.ceil(muteRemainingMs / 60000)}分钟`)
-                    : (theaterMode ? "写下番外指令..." : undefined)}
-            />
+            <div className="chat-input-field">
+                {!inputText && !inputLocked && !theaterMode && !isGroup && (
+                    <span className="chat-input-placeholder" aria-hidden="true" />
+                )}
+                <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={inputText}
+                    onChange={e => {
+                        setInputText(e.target.value);
+                        setSuggestClosed(false);
+                        e.target.style.height = "auto";
+                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                    }}
+                    onFocus={(e) => {
+                        if (panelOpen) {
+                            e.target.blur();
+                            onClosePanels();
+                            const target = e.target as HTMLTextAreaElement;
+                            requestAnimationFrame(() => requestAnimationFrame(() => target.focus()));
+                        }
+                        setSuggestClosed(false);
+                    }}
+                    onBlur={() => setSuggestClosed(true)}
+                    onKeyDown={e => {
+                        if (e.key === "Escape") {
+                            setSuggestClosed(true);
+                            return;
+                        }
+                        if (shouldSendChatInputOnEnter(e, enterToSendEnabled)) {
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                    }}
+                    enterKeyHint={enterToSendEnabled ? "send" : "enter"}
+                    className="chat-input-textarea"
+                    disabled={inputLocked}
+                    placeholder={inputLocked
+                        ? (isSpectator ? "围观中，你不在这个群里" : `禁言中，剩余${Math.ceil(muteRemainingMs / 60000)}分钟`)
+                        : (theaterMode ? "写下番外指令..." : undefined)}
+                />
+            </div>
 
             <div className="chat-input-actions">
                 <button
@@ -1135,6 +1155,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const [mediaDetailMsg, setMediaDetailMsg] = useState<ChatMessage | null>(null);
     // Quote reply
     const [quotingMessage, setQuotingMessage] = useState<ChatMessage | null>(null);
+    // Role sender (send as character in single chat)
+    const [sendAsCharacter, setSendAsCharacter] = useState(false);
     // Emoji panel
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [showStickerPanel, setShowStickerPanel] = useState(false);
@@ -1343,6 +1365,22 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         scrollRef,
         `${session.id}:${offlineMode}:${isMultiSelectMode}:${showEmojiPanel}:${showStickerPanel}:${showPlusMenu}:${theaterMode}:${!!quotingMessage}`,
     );
+
+    // 固定聊天室容器高度为初始视口高度，防止键盘弹起时整个页面被推上去
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        
+        // 记录初始高度并存储到全局，供 useChatBottomReserve 使用
+        const initialHeight = window.innerHeight;
+        wrapper.style.height = `${initialHeight}px`;
+        (window as any).__chatInitialHeight = initialHeight;
+        
+        return () => {
+            if (wrapper) wrapper.style.height = '';
+            delete (window as any).__chatInitialHeight;
+        };
+    }, []);
 
     const selectStoredMessageWindow = useCallback((allMsgs: ChatMessage[]) => {
         if (allMsgs.length <= INITIAL_LOAD) {
@@ -2414,8 +2452,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             if (!(session.participantIds || []).includes(r.characterId)) continue;
             if (isGroupMuted(session, r.characterId)) continue;
             const responseBatchId = createResponseBatchId();
-            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
+            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
             const parts = stripInvalidStickerParts(rawParts, r.characterId);
+
+            if (fileSummary) {
+                const msgs = loadChatMessages(session.id);
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = msgs[i];
+                    if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                        updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                        break;
+                    }
+                }
+            }
             let attachedState = false;
             let savedAnyPart = false;
             for (const part of parts) {
@@ -2815,8 +2864,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(aiResponseText, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(aiResponseText, previousState);
         const parts = stripInvalidStickerParts(rawParts);
+
+        if (fileSummary) {
+            const msgs = loadChatMessages(session.id);
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                    updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                    break;
+                }
+            }
+        }
         throwIfGenerationStopped(options);
 
         // Detect call triggers and AI media actions, filter them out
@@ -3013,10 +3073,15 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
     const persistHiddenToolResult = (content?: string, toolExecutionId?: string) => {
         if (!content) return;
+        // 截断过于巨大的工具结果（如读取万字源码），防止 IndexedDB 膨胀导致页面加载卡死
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断，不影响 AI 实际记忆]"
+            : content;
+            
         pushChatMessage({
             sessionId: session.id,
             role: "tool",
-            content,
+            content: safeContent,
             mediaType: "tool_result",
             toolExecutionId,
         });
@@ -3029,10 +3094,13 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         senderName?: string;
     }) => {
         if (!content) return;
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断]"
+            : content;
         pushChatMessage({
             sessionId: session.id,
             role: "assistant",
-            content,
+            content: safeContent,
             mediaType: "tool_call",
             responseBatchId: options?.responseBatchId,
             responseRoundId: options?.responseRoundId,
@@ -3043,10 +3111,13 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
     const persistToolNotice = (content?: string) => {
         if (!content) return;
+        const safeContent = content.length > 2000 
+            ? content.slice(0, 2000) + "\n...[内容过长已截断]"
+            : content;
         const msg = pushChatMessage({
             sessionId: session.id,
             role: "system",
-            content,
+            content: safeContent,
             mediaType: "tool_notice",
         });
         setMessages(prev => [...prev, msg]);
@@ -3094,13 +3165,23 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         for (const result of results) {
             for (const att of result.mediaAttachments || []) {
                 throwIfGenerationStopped(guard);
+                // GitHub diff preview needs special mediaData structure
+                let metaPayload = att.meta;
+                if (att.url === "github_diff_preview" && metaPayload?.args?._staging) {
+                    // 剔除巨型的 _staging 数据，避免 IndexedDB 膨胀和组件渲染卡死
+                    const { _staging, ...cleanArgs } = metaPayload.args;
+                    metaPayload = { ...metaPayload, args: cleanArgs };
+                }
+                const mediaData = att.url === "github_diff_preview"
+                    ? { title: att.title, meta: metaPayload, status: "pending" }
+                    : { fileType: att.type, fileName: att.title };
                 const msg = pushChatMessage({
                     sessionId: session.id,
                     role: "assistant",
                     content: att.title || "",
                     mediaType: "media_file",
                     mediaUrl: att.url,
-                    mediaData: { fileType: att.type, fileName: att.title },
+                    mediaData,
                     toolExecutionId,
                     ...(session.isGroup ? {
                         senderCharacterId: result.actorCharacterId,
@@ -3413,6 +3494,27 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         return { ...msg, mediaData: updatedData };
     };
 
+    const handleSendTextFile = async (selection: ChatTextFileSelection): Promise<void> => {
+        if (!ensureGroupSpeakPermission()) return;
+        if (isGenerating) {
+            showChatToast("请先等待对方回复");
+            return;
+        }
+        try {
+            const mimeType = selection.file.type || "text/plain";
+            const mediaUrl = await storeMediaBlob(selection.file, mimeType, "file");
+            const sent = sendRichMessage(
+                "media_file",
+                { fileType: "file", fileName: selection.file.name },
+                selection.file.name,
+                mediaUrl,
+            );
+            if (sent) setRichModal(null);
+        } catch (error) {
+            showChatToast(`文件保存失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
+
     const sendRichMessage = (mediaType: ChatMessage["mediaType"], mediaData: ChatMessage["mediaData"], content: string = "", mediaUrl?: string): boolean => {
         if (!ensureGroupSpeakPermission()) return false;
         if (isGenerating) {
@@ -3615,8 +3717,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         const responseRoundId = senderInfo.responseRoundId || createResponseRoundId();
                         const editableResponseText = senderInfo.editableResponseText || `[${senderInfo.characterName}]: ${cleanedEditableText}`;
                         const previousState = getLatestCharacterStateValues(senderInfo.characterId);
-                        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(text, previousState);
+                        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(text, previousState);
                         const parts = stripInvalidStickerParts(rawParts, senderInfo.characterId);
+
+                        if (fileSummary) {
+                            const msgs = loadChatMessages(session.id);
+                            for (let i = msgs.length - 1; i >= 0; i--) {
+                                const m = msgs[i];
+                                if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                                    updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                                    break;
+                                }
+                            }
+                        }
                         let attachedState = false;
                         let savedAnyPart = false;
                         for (const part of parts) {
@@ -3792,6 +3905,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         if (!isCurrentGeneration()) return;
                         persistHiddenAssistantToolCall(content, options);
                     },
+                    onToolExecution: (results, _historyContent, options) => {
+                        if (!isCurrentGeneration()) return;
+                        handleToolExecution(results, generationGuard, options?.toolExecutionId);
+                    },
                     onNativeToolAssistantTurn: async ({ content, rawContent, reasoning, openRouterReasoningDetails, toolCalls }) => {
                         if (!isCurrentGeneration()) return;
                         // Publish the visible turn (text + stickers / images / red packets /
@@ -3957,6 +4074,12 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         } : undefined;
         setQuotingMessage(null);
 
+        // If sending as character (single chat only)
+        const sendingAsCharacter = sendAsCharacter && !session.isGroup;
+        if (sendAsCharacter) {
+            setSendAsCharacter(false);
+        }
+
         const commitSendText = (currentText: string) => {
             // 掷骰子：整条消息就是骰子图标时，发骰子气泡（内容仅图标），
             // 点数由系统旁白公布——避免结果挂在 user 消息上被角色模仿格式
@@ -3965,10 +4088,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
             const newMsg = pushChatMessage({
                 sessionId: session.id,
-                role: "user",
+                role: sendingAsCharacter ? "assistant" : "user",
                 content: currentText,
                 mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
                 mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
+                ...(sendingAsCharacter && character ? {
+                    senderCharacterId: character.id,
+                    senderName: character.name,
+                } : {}),
             });
 
             setMessages(prev => [...prev, newMsg]);
@@ -3980,10 +4107,13 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 });
                 setMessages(prev => [...prev, diceAside]);
             }
-            setPendingGenerate(true);
-            // 按回复键发送：消息落库后立即触发模型回复（无论插件是否异步改写，
-            // 都在消息真正写入后触发，避免回复基于旧上下文）
-            if (options?.autoReply) void triggerAIResponse();
+            // 以角色身份发送时不触发自动生成或模型回复
+            if (!sendingAsCharacter) {
+                setPendingGenerate(true);
+                // 按回复键发送：消息落库后立即触发模型回复（无论插件是否异步改写，
+                // 都在消息真正写入后触发，避免回复基于旧上下文）
+                if (options?.autoReply) void triggerAIResponse();
+            }
         };
 
         // 聊天插件织入点 user.beforeSend：无插件时走原同步路径，
@@ -4675,8 +4805,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId, stateCutoff ? { before: stateCutoff } : undefined);
 
-        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(editedResponseContent, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue, fileSummary } = parseAIResponse(editedResponseContent, previousState);
         const parts = stripInvalidStickerParts(rawParts);
+
+        if (fileSummary) {
+            const msgs = loadChatMessages(session.id);
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m.role === "user" && m.mediaType === "media_file" && m.mediaData?.fileType === "file" && !m.mediaData?.fileSummary) {
+                    updateMessageMediaData(m.id, { ...m.mediaData, fileSummary });
+                    break;
+                }
+            }
+        }
         const normalizedParts = normalizeEditedAssistantParts(parts);
         if (normalizedParts.length === 0 && (statusPanel || innerMonologue)) {
             normalizedParts.push({ content: "" });
@@ -6254,11 +6395,13 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 	                theaterMode={theaterMode}
 	                enterToSendEnabled={enterToSendEnabled}
 	                quotingMessage={quotingMessage}
+                sendAsCharacter={sendAsCharacter}
                 showEmojiPanel={showEmojiPanel}
                 showStickerPanel={showStickerPanel}
                 showPlusMenu={showPlusMenu}
                 customPlusActions={customPlusActions}
                 onClearQuote={() => setQuotingMessage(null)}
+                onToggleSendAsCharacter={() => setSendAsCharacter(!sendAsCharacter)}
                 onToggleOfflineMode={toggleOfflineMode}
                 onClosePanels={() => { setShowEmojiPanel(false); setShowStickerPanel(false); setShowPlusMenu(false); }}
 	                onToggleEmojiPanel={() => { setShowEmojiPanel(!showEmojiPanel); setShowStickerPanel(false); setShowPlusMenu(false); }}
@@ -6412,6 +6555,12 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             {richModal === "text_photo" && (
                 <TextPhotoModal
                     onSend={(text) => { setRichModal(null); sendRichMessage("image", { label: text }); }}
+                    onClose={() => setRichModal(null)}
+                />
+            )}
+            {richModal === "file" && (
+                <TextFileInputModal
+                    onSend={(selection) => { void handleSendTextFile(selection); }}
                     onClose={() => setRichModal(null)}
                 />
             )}

@@ -15,6 +15,8 @@ export const AGENT_COMPUTER_CAPABILITY_ID = "agent_computer";
 export const LOCAL_DATA_LIBRARY_CAPABILITY_ID = "local_data_library";
 export const TOOLBOX_MANAGEMENT_CAPABILITY_ID = "toolbox_management";
 export const TIMED_WAKE_CAPABILITY_ID = "timed_wake";
+export const READ_HISTORY_FILE_CAPABILITY_ID = "read_history_file";
+export const GITHUB_DEVELOPER_CAPABILITY_ID = "github_developer";
 export const REALITY_BRIDGE_CAPABILITY_ID = "reality_bridge_send";
 
 export type InternalToolDefinition = {
@@ -98,8 +100,21 @@ const TIMED_WAKE_PARAMETER_SCHEMA = JSON.stringify({
     required: ["delayMinutes", "intent"],
 });
 
+const READ_HISTORY_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        messageId: {
+            type: "string",
+            description: "要读取的历史文件对应的消息 ID（如 msg_123456）",
+        },
+    },
+    required: ["messageId"],
+});
+
 const TIMED_WAKE_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你打算过一会儿主动找{{user}}时，可以用这个动作约定一个时间。到点后系统会把你当时的想法推回上下文，你再决定是否发消息。",
+    "",
     "动作：稍后主动联系",
     "用途：为当前聊天约定「过一会儿主动联系对方」。这不是睡觉醒来——而是你现在决定隔一段时间再主动找对方；到点后系统会把你当时的想法推回上下文，你再决定发消息还是先不发。",
     "",
@@ -118,6 +133,8 @@ const TIMED_WAKE_USAGE_GUIDE = [
 
 const NOTE_WALL_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "这是一个公共便签墙社区，你可以查看别人发的便签、回复别人、或者发自己的便签。适合把生活碎片顺手贴下，像顺便路过留个字条那样自然。",
+    "",
     "服务：便签墙",
     "用途：公共社区便签墙相关服务。",
     "",
@@ -173,6 +190,8 @@ const NOTE_WALL_USAGE_GUIDE = [
 
 const MUSIC_CONTROL_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你想给{{user}}放一首歌、查看 ta 在听什么、或者看 ta 手机里有哪些音乐时，用这个服务。记得：想放歌就直接「播放音乐」，别先去查看音乐状态或音乐库；那些查看动作只在{{user}}明确问起时才需要。",
+    "",
     "服务：网易云音乐",
     "用途：控制{{user}}小手机里的音乐播放，查看{{user}}小手机里的音乐库、网易云歌单和播放列表。",
     "",
@@ -248,6 +267,8 @@ const MUSIC_CONTROL_USAGE_GUIDE = [
 
 const CALENDAR_MANAGEMENT_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你想看自己本周或某一周有哪些安排、帮自己添加一个日程、改日程或取消日程时，用这个服务。",
+    "",
     "服务：日历管理",
     "用途：查看、添加、修改、取消你本周或指定日期所在周的日程。",
     "",
@@ -493,6 +514,166 @@ const CALENDAR_DELETE_PARAMETER_SCHEMA = JSON.stringify({
     },
 });
 
+const GITHUB_READ_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要读取的文件路径，如 components/chat/chat-settings-panel.tsx" },
+        startLine: { type: "number", description: "起始行号（可选）" },
+        endLine: { type: "number", description: "结束行号（可选）" }
+    },
+    required: ["path"]
+});
+
+const GITHUB_LIST_DIR_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要列出的目录路径，留空或 / 表示根目录" }
+    }
+});
+
+const GITHUB_WRITE_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要新建或整体覆盖的文件路径" },
+        content: { type: "string", description: "文件的完整新内容" }
+    },
+    required: ["path", "content"]
+});
+
+const GITHUB_EDIT_FILE_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        path: { type: "string", description: "要修改的文件路径" },
+        find: { type: "string", description: "原文片段（须唯一，原样匹配）" },
+        replace: { type: "string", description: "替换为的新代码片段" },
+        all: { type: "boolean", description: "是否替换全部匹配项，默认 false" }
+    },
+    required: ["path", "find", "replace"]
+});
+
+const GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        message: { type: "string", description: "提交信息 (Commit message)" }
+    },
+    required: ["message"]
+});
+
+const GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {}
+});
+
+const GITHUB_UNDO_COMMIT_PARAMETER_SCHEMA = JSON.stringify({
+    type: "object",
+    properties: {
+        sha: { type: "string" },
+        parentSha: { type: "string" }
+    }
+});
+
+const GITHUB_DEVELOPER_SUBTOOLS: InternalToolDefinition[] = [
+    {
+        name: "READ_GITHUB_FILE",
+        description: "读取仓库指定文件的代码内容。",
+        parameterSchema: GITHUB_READ_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "LIST_GITHUB_DIR",
+        description: "列出仓库指定目录下的文件，方便找路。",
+        parameterSchema: GITHUB_LIST_DIR_PARAMETER_SCHEMA,
+    },
+    {
+        name: "WRITE_GITHUB_FILE",
+        description: "新建文件或整体覆盖已有文件内容，写入提交暂存区。",
+        parameterSchema: GITHUB_WRITE_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "EDIT_GITHUB_FILE",
+        description: "修改已有内容的首选方式（通过 find/replace 片段替换）。只输出改动片段，不要整体重写大文件，改动进入提交暂存区。",
+        parameterSchema: GITHUB_EDIT_FILE_PARAMETER_SCHEMA,
+    },
+    {
+        name: "PUBLISH_GITHUB_COMMIT",
+        description: "把提交暂存区的全部修改作为一个 PR 提案发给用户确认，或直接提交到仓库。",
+        parameterSchema: GITHUB_PUBLISH_COMMIT_PARAMETER_SCHEMA,
+    },
+    {
+        name: "DISCARD_GITHUB_STAGING",
+        description: "清空暂存区，放弃所有未提交的修改。",
+        parameterSchema: GITHUB_DISCARD_STAGING_PARAMETER_SCHEMA,
+    },
+    {
+        name: "UNDO_GITHUB_COMMIT",
+        description: "撤销指定的代码提交（前端内部使用）。",
+        parameterSchema: GITHUB_UNDO_COMMIT_PARAMETER_SCHEMA,
+    }
+];
+
+const GITHUB_DEVELOPER_USAGE_GUIDE = [
+    "以下是你获取指令的返回结果：",
+    "服务：GitHub 开发者",
+    "用途：读取和修改用户的 GitHub 仓库代码。你被授权作为高级驻场工程师，拥有多文件暂存区能力。",
+    "",
+    "工作流：",
+    "1. 用 LIST_GITHUB_DIR 找文件，用 READ_GITHUB_FILE 读取源码核对。",
+    "2. 改已有内容一律用 EDIT_GITHUB_FILE（只替换片段），绝不整体重写大文件；写全新文件时才用 WRITE_GITHUB_FILE。",
+    "3. 所有的 WRITE 和 EDIT 都只是把修改放入你的『本地暂存区』。",
+    "4. 多个文件全部改完后，必须调用 PUBLISH_GITHUB_COMMIT 把暂存区打包发出，系统会生成代码差异预览卡片让用户最终确认。",
+    "",
+    "⚠️ 核心红线警告：",
+    "- PUBLISH_GITHUB_COMMIT（提交）和 DISCARD_GITHUB_STAGING（清空）这两个动作，必须在单独的一次回复中调用！绝对不允许在同一轮回复中既 EDIT 文件又去 PUBLISH 或 DISCARD，否则会导致并发冲突、暂存区读写错乱或丢失！",
+    "",
+    "执行时必须使用下面的具体动作名。",
+    "",
+    "动作：LIST_GITHUB_DIR",
+    "描述：列出仓库指定目录下的文件，方便找路。",
+    "参数：",
+    "  - path (string): 目录路径，留空或 / 表示根目录",
+    "示例：",
+    '[执行动作:LIST_GITHUB_DIR({"path":"components/ui"})]',
+    "",
+    "动作：READ_GITHUB_FILE",
+    "描述：读取仓库指定文件的代码内容。修改前必读，核对原文。会自动优先返回暂存区里的最新未提交修改（如果存在并会带上⚠️标记）。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - startLine (number): 起始行号（可选）",
+    "  - endLine (number): 结束行号（可选）",
+    "示例：",
+    '[执行动作:READ_GITHUB_FILE({"path":"package.json"})]',
+    "",
+    "动作：EDIT_GITHUB_FILE",
+    "描述：修改代码的首选工具（find/replace）。要求 find 提供的片段在原文中必须完全一致且唯一。改动会进入暂存区。必须单独调用，勿与提交流程混用。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - find (string): 要替换的原文片段",
+    "  - replace (string): 替换为的新代码片段",
+    "  - all (boolean): 是否替换全部匹配项，默认 false",
+    "示例：",
+    '[执行动作:EDIT_GITHUB_FILE({"path":"app/page.tsx","find":"<div className=\"old\">","replace":"<div className=\"new\">"})]',
+    "",
+    "动作：WRITE_GITHUB_FILE",
+    "描述：新建文件或整体覆盖写入。改动会进入暂存区。必须单独调用，勿与提交流程混用。",
+    "参数：",
+    "  - path (string): 文件路径",
+    "  - content (string): 文件的完整新内容",
+    "示例：",
+    '[执行动作:WRITE_GITHUB_FILE({"path":"README.md","content":"# 新内容"})]',
+    "",
+    "动作：PUBLISH_GITHUB_COMMIT",
+    "描述：把暂存区的修改打包发起提交。必须在单独的一次回复中调用。",
+    "参数：",
+    "  - message (string): 提交信息 (Commit message)",
+    "示例：",
+    '[执行动作:PUBLISH_GITHUB_COMMIT({"message":"feat: 添加暗色模式支持"})]',
+    "",
+    "动作：DISCARD_GITHUB_STAGING",
+    "描述：清空暂存区，放弃所有未提交的修改。必须在单独的一次回复中调用，当用户拒绝提案或你想重新开始时使用。",
+    "参数：无",
+    "示例：",
+    "[执行动作:DISCARD_GITHUB_STAGING({})]"
+].join("\n");
+
 const NOTE_WALL_SUBTOOLS: InternalToolDefinition[] = [
     {
         name: "查看便签列表",
@@ -614,6 +795,8 @@ const SEND_FILE_PARAMETER_SCHEMA = JSON.stringify({
 
 const SEND_FILE_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你想给{{user}}发送一个文件（音频、图片、视频、文档等），可以用这个动作。文件必须是可公开访问的完整 URL。",
+    "",
     "服务：发送文件",
     "用途：将外部 URL 文件（音频、图片、视频、文件）发送给{{user}}，{{user}}可以直接播放或下载。",
     "",
@@ -712,6 +895,8 @@ const LOCAL_DATA_LIBRARY_SUBTOOLS: InternalToolDefinition[] = [
 
 const LOCAL_DATA_LIBRARY_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你想翻看{{user}}手机里存的角色卡、聊天记录、朋友圈、记忆、设置、应用数据时，用这个服务。先列目录看有什么，再按需读取或搜索，避免一次读太多。",
+    "",
     "服务：本地资料库",
     "用途：浏览、读取和搜索{{user}}小手机里的本地数据，包括角色卡、聊天、朋友圈、记忆、工具箱、设置和应用数据。",
     "",
@@ -1073,6 +1258,8 @@ const TOOLBOX_MANAGEMENT_SUBTOOLS: InternalToolDefinition[] = [
 
 const TOOLBOX_MANAGEMENT_USAGE_GUIDE = [
     "以下是你获取指令的返回结果：",
+    "你想给自己新建一个 REST 工具（调外部 API）、或者把几个工具步骤串成一个组合工具流程时，用这个服务。只能修改你自己创建的工具，不能改用户或内置的。",
+    "",
     "服务：工具箱管理",
     "用途：创建和维护你自己写入的 REST 工具、REST 套件、组合工具和组合工具套件。你只能修改 createdBy 为 ai 的内容，不能修改用户手动创建或内置内容。",
     "",
@@ -1261,10 +1448,28 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
         updatedAt: 0,
     },
     {
+        id: READ_HISTORY_FILE_CAPABILITY_ID,
+        name: "读取聊天文件",
+        description: "根据消息 ID 读取历史聊天记录中用户发送的具体文件内容。",
+        enabled: true,
+        mode: "auto",
+        createdAt: 0,
+        updatedAt: 0,
+    },
+    {
         id: TIMED_WAKE_CAPABILITY_ID,
         name: "稍后主动联系",
         description: "让角色约定「过一会儿主动联系对方」：现在设定一个延时与想法，到点后由角色决定主动发消息或静默（不是睡觉醒来）。",
         enabled: false,
+        mode: "auto",
+        createdAt: 0,
+        updatedAt: 0,
+    },
+    {
+        id: GITHUB_DEVELOPER_CAPABILITY_ID,
+        name: "GitHub 开发者",
+        description: "允许 AI 角色直接读取并修改你的 GitHub 仓库代码。仅在聊天设置中开启了开发者权限时可用。",
+        enabled: false, // 由 settings 中的 developerModeEnabled 动态控制
         mode: "auto",
         createdAt: 0,
         updatedAt: 0,
@@ -1297,6 +1502,8 @@ export function getEnabledInternalCapabilities(appId?: string): InternalCapabili
         if (!item.enabled || item.mode === "off") return false;
         // 角色电脑是可插拔模块：没连接就不注入，模型完全看不见
         if (item.id === AGENT_COMPUTER_CAPABILITY_ID && !isAgentComputerConfigured()) return false;
+        // GitHub 开发者能力由聊天设置注入时覆盖，这里如果是查全局列表默认不返回
+        if (item.id === GITHUB_DEVELOPER_CAPABILITY_ID) return false;
         return true;
     });
 }
@@ -1366,12 +1573,27 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
             usageGuide: TOOLBOX_MANAGEMENT_USAGE_GUIDE,
         };
     }
+    if (capability.id === READ_HISTORY_FILE_CAPABILITY_ID) {
+        return {
+            name: capability.name,
+            description: capability.description,
+            parameterSchema: READ_HISTORY_FILE_PARAMETER_SCHEMA,
+        };
+    }
     if (capability.id === TIMED_WAKE_CAPABILITY_ID) {
         return {
             name: capability.name,
             description: capability.description,
             parameterSchema: TIMED_WAKE_PARAMETER_SCHEMA,
             usageGuide: TIMED_WAKE_USAGE_GUIDE,
+        };
+    }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return {
+            name: capability.name,
+            description: capability.description,
+            parameterSchema: "{}",
+            usageGuide: GITHUB_DEVELOPER_USAGE_GUIDE,
         };
     }
     if (capability.id === REALITY_BRIDGE_CAPABILITY_ID) {
@@ -1473,6 +1695,9 @@ export function getInternalCapabilitySubToolDefinition(
     if (capability.id === TOOLBOX_MANAGEMENT_CAPABILITY_ID) {
         return TOOLBOX_MANAGEMENT_SUBTOOLS.find(tool => tool.name === name) ?? null;
     }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return GITHUB_DEVELOPER_SUBTOOLS.find(tool => tool.name === name) ?? null;
+    }
     if (capability.id === REALITY_BRIDGE_CAPABILITY_ID) {
         return realityBridgeSubTools().find(tool => tool.name === name) ?? null;
     }
@@ -1497,6 +1722,9 @@ export function getInternalCapabilitySubToolDefinitions(
     if (capability.id === TOOLBOX_MANAGEMENT_CAPABILITY_ID) {
         return TOOLBOX_MANAGEMENT_SUBTOOLS;
     }
+    if (capability.id === GITHUB_DEVELOPER_CAPABILITY_ID) {
+        return GITHUB_DEVELOPER_SUBTOOLS;
+    }
     if (capability.id === REALITY_BRIDGE_CAPABILITY_ID) {
         return realityBridgeSubTools();
     }
@@ -1506,8 +1734,14 @@ export function getInternalCapabilitySubToolDefinitions(
 export function findEnabledInternalSubToolDefinition(
     name: string,
     appId?: string,
+    injectDeveloperCapability: boolean = false,
 ): { capability: InternalCapabilityConfig; tool: InternalToolDefinition } | null {
-    for (const capability of getEnabledInternalCapabilities(appId)) {
+    const capabilities = getEnabledInternalCapabilities(appId);
+    if (injectDeveloperCapability) {
+        const dev = getInternalCapability(GITHUB_DEVELOPER_CAPABILITY_ID);
+        if (dev) capabilities.push({ ...dev, enabled: true });
+    }
+    for (const capability of capabilities) {
         const tool = getInternalCapabilitySubToolDefinition(capability, name);
         if (tool) return { capability, tool };
     }

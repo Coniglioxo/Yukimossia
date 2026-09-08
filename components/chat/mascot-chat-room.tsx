@@ -481,6 +481,20 @@ export function MascotChatRoom({ onBack, onDeleted }: MascotChatRoomProps) {
     const longPressStartRef = useRef<ContextMenuAnchor | null>(null);
     const longPressTriggeredRef = useRef(false);
     const identity = useMemo(() => resolveUserIdentity(), []);
+    
+    // 固定容器高度防止键盘推动页面（与 ChatRoom 一致）
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        const initialHeight = window.innerHeight;
+        wrapper.style.height = `${initialHeight}px`;
+        (window as any).__chatInitialHeight = initialHeight;
+        return () => {
+            if (wrapper) wrapper.style.height = '';
+            delete (window as any).__chatInitialHeight;
+        };
+    }, []);
+    
     useChatBottomReserve(wrapperRef, scrollRef, `${showEmojiPanel}:${pendingImages.length}`);
     const allVisibleMessageEntries = useMemo(() => (
         chat.messages

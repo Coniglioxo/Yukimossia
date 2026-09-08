@@ -49,12 +49,32 @@ export function useChatBottomReserve<TWrapper extends HTMLElement, TScroll exten
             const wasNearBottom = el
                 ? el.scrollHeight - el.scrollTop - el.clientHeight < STICK_TO_BOTTOM_THRESHOLD
                 : false;
-            const height = Math.ceil(overlay.getBoundingClientRect().height);
+            
+            // 计算输入栏高度 + 键盘占用的空间
+            const overlayRect = overlay.getBoundingClientRect();
+            const overlayHeight = Math.ceil(overlayRect.height);
+            
+            // 使用初始记录的固定高度来计算键盘高度
+            const initialHeight = (window as any).__chatInitialHeight || window.innerHeight;
+            const visualHeight = window.visualViewport?.height || window.innerHeight;
+            const keyboardHeight = Math.max(0, initialHeight - visualHeight);
+            
+            // 总预留高度 = 输入栏高度 + 键盘高度
+            const reserveHeight = overlayHeight + keyboardHeight;
 
-            if (height > 0) {
-                wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${height}px`);
+            if (reserveHeight > 0) {
+                wrapper.style.setProperty(CHAT_BOTTOM_RESERVE_CSS_VAR, `${reserveHeight}px`);
+                // 同时更新 page-body 的 bottom
+                const pageBody = wrapper.querySelector('.page-body') as HTMLElement;
+                if (pageBody) {
+                    pageBody.style.bottom = `${reserveHeight}px`;
+                }
             } else {
                 wrapper.style.removeProperty(CHAT_BOTTOM_RESERVE_CSS_VAR);
+                const pageBody = wrapper.querySelector('.page-body') as HTMLElement;
+                if (pageBody) {
+                    pageBody.style.bottom = '';
+                }
             }
 
             if (wasNearBottom) scheduleStickToBottom();

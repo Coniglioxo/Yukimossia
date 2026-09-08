@@ -38,6 +38,7 @@ export interface ParsedAIResponse {
     freshStateValues: StateValue[];
     statusPanel: string;
     innerMonologue: string;
+    fileSummary?: string;
 }
 
 // ── Rich-media patterns (non-global, for single match with index) ──
@@ -588,9 +589,15 @@ function parseSegment(segment: string, parts: ParsedMessagePart[]) {
 // ── Main parser ──────────────────────────────────────────
 
 export function parseAIResponse(rawText: string, previousState: StateValue[]): ParsedAIResponse {
+    let fileSummary: string | undefined;
+    let workingText = rawText.replace(/\[文件摘要[：:]\s*([^\]]+)\]/g, (_, summary) => {
+        fileSummary = summary.trim();
+        return "";
+    });
+
     // 0. FIRST: extract ```html blocks and <style>+HTML before any processing
     const htmlBlockPlaceholders: { placeholder: string; original: string }[] = [];
-    let protected_ = rawText;
+    let protected_ = workingText;
     // Protect ```html...``` blocks
     protected_ = protected_.replace(/```html\s*\n[\s\S]*?```/g, (match) => {
         const placeholder = `\x00HTML_BLOCK_${htmlBlockPlaceholders.length}\x00`;
@@ -664,6 +671,7 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     return {
         parts: cleaned,
         stateValues,
+        fileSummary,
         freshStateValues: parsedSV.stateValues,
         statusPanel: restore(status.content),
         innerMonologue: restore(mono.content),

@@ -2279,7 +2279,7 @@ export function MascotFloat() {
 	                        📎
 	                        <input
 	                          type="file"
-	                          accept="image/*"
+	                          accept="*"
 	                          multiple
 	                          className="mascot-chat-attach-input"
 	                          onChange={(e) => {
@@ -2387,7 +2387,7 @@ export function MascotFloat() {
 	                          📎
 	                          <input
 	                            type="file"
-	                            accept="image/*"
+	                            accept="*"
 	                            multiple
 	                            className="mascot-chat-attach-input"
 	                            onChange={(e) => {
