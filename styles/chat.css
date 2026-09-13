@@ -7253,3 +7253,37 @@
   background: currentColor;
   animation: chat-stream-cursor-blink 1s steps(2, start) infinite;
 }
+
+/* ── 会话级微信式输入栏布局 ── */
+.chat-input-bar-wechat {
+  display: grid !important;
+  grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+  grid-template-areas: "plus field sticker send";
+  align-items: end;
+  column-gap: 8px;
+}
+.chat-input-bar-wechat .chat-input-field { grid-area: field; min-width: 0; }
+.chat-input-bar-wechat .chat-input-actions { display: contents; padding: 0; }
+.chat-input-bar-wechat .chat-action-plus,
+.chat-input-bar-wechat .chat-action-sticker,
+.chat-input-bar-wechat .chat-action-send,
+.chat-input-bar-wechat .chat-offline-return,
+.chat-input-bar-wechat .chat-offline-emoji,
+.chat-input-bar-wechat .chat-offline-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-input-bar-wechat .chat-action-plus,
+.chat-input-bar-wechat .chat-offline-return { grid-area: plus; }
+.chat-input-bar-wechat .chat-action-sticker,
+.chat-input-bar-wechat .chat-offline-emoji { grid-area: sticker; }
+.chat-input-bar-wechat .chat-action-send,
+.chat-input-bar-wechat .chat-offline-send { grid-area: send; }
+.chat-input-bar-wechat .chat-action-offline,
+.chat-input-bar-wechat .chat-action-emoji,
+.chat-input-bar-wechat .chat-action-reply { display: none; }
+.chat-input-bar-wechat .chat-plus-menu,
+.chat-input-bar-wechat .chat-plugin-input-toolbar,
+.chat-input-bar-wechat .chat-emoji-panel-wrap,
+.chat-input-bar-wechat .chat-sticker-panel { grid-column: 1 / -1; }
