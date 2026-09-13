@@ -1312,19 +1312,15 @@ export function ChatSettingsPanel({
                             <span className="menu-desc">原始底栏或微信式布局（仅当前会话）</span>
                         </div>
                         <div className="menu-right">
-                            <select
-                                className="ui-input h-8 text-xs"
-                                value={chatUiMode}
-                                onChange={e => {
-                                    const next = e.target.value === "wechat" ? "wechat" : "original";
+                            <Toggle
+                                checked={chatUiMode === "wechat"}
+                                onChange={enabled => {
+                                    const next = enabled ? "wechat" : "original";
                                     setChatUiMode(next);
                                     updateSession({ chatUiMode: next });
                                 }}
-                                aria-label="聊天输入栏 UI"
-                            >
-                                <option value="original">原始 UI</option>
-                                <option value="wechat">微信式 UI</option>
-                            </select>
+                                aria-label="切换微信式聊天输入栏"
+                            />
                         </div>
                     </div>
                 </div>
