@@ -7282,7 +7282,7 @@
 .chat-input-bar-wechat .chat-offline-send { grid-area: send; }
 .chat-input-bar-wechat .chat-action-offline,
 .chat-input-bar-wechat .chat-action-emoji,
-.chat-input-bar-wechat .chat-action-reply { display: none; }
+.chat-input-bar-wechat .chat-action-reply { display: none !important; }
 .chat-input-bar-wechat .chat-plus-menu,
 .chat-input-bar-wechat .chat-plugin-input-toolbar,
 .chat-input-bar-wechat .chat-emoji-panel-wrap,
