@@ -7292,6 +7292,10 @@
 .chat-input-bar-wechat .chat-offline-emoji { grid-area: sticker; }
 .chat-input-bar-wechat .chat-action-send,
 .chat-input-bar-wechat .chat-offline-send { grid-area: send; }
+.chat-input-bar-wechat .chat-action-send svg {
+  width: 20px;
+  height: 20px;
+}
 .chat-input-bar-wechat .chat-action-offline,
 .chat-input-bar-wechat .chat-action-emoji,
 .chat-input-bar-wechat .chat-action-reply { display: none !important; }
