@@ -52,7 +52,7 @@ import { useKeyboardDismissAutoSend } from "@/components/chat/use-keyboard-dismi
 import { cancelBailoutKey } from "@/lib/push-bailout-client";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
-import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
+import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X, Smile } from "lucide-react";
 import { setDebugChatState } from "@/lib/debug-store";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { setChatActive } from "@/lib/music-action-queue";
@@ -630,6 +630,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onSendText: (text: string, options?: { autoReply?: boolean }) => boolean;
     onStopGeneration: () => void;
     onTriggerAIResponse: () => void;
+    uiMode: "original" | "wechat";
 	onSendSticker: (name: string, url?: string) => void;
 }>(function ChatTextInputBar({
     characterName,
@@ -663,6 +664,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onSendText,
     onStopGeneration,
     onTriggerAIResponse,
+    uiMode,
     onSendSticker,
 }, ref) {
     const [inputText, setInputText] = useState("");
@@ -736,6 +738,10 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
         { icon: <Gift size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "礼物", onClick: () => onOpenRichModal("gift") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>, label: "位置", onClick: () => onOpenRichModal("location") },
         { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" /></svg>, label: "语音条", onClick: () => onOpenRichModal("voice_msg") },
+        ...(uiMode === "wechat" ? [
+            { icon: <Smile size={22} strokeWidth={1.5} color="var(--c-text)" />, label: "Emoji 表情", onClick: onToggleEmojiPanel },
+            { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10" /><path d="M8 9h8M8 13h5" /></svg>, label: "线下聊天", onClick: onToggleOfflineMode },
+        ] : []),
         ...customPlusActions.map(action => ({
             icon: action.appIconDataUrl
                 ? <span className="chat-plus-custom-app-icon" style={{ backgroundImage: `url(${action.appIconDataUrl})` }} aria-hidden="true" />
@@ -839,7 +845,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
             <div className="chat-input-actions">
                 <button
                     onClick={onToggleOfflineMode}
-                    className="ui-bare-btn text-[var(--c-text)] chat-offline-toggle"
+                    className="ui-bare-btn text-[var(--c-text)] chat-offline-toggle chat-action-offline"
                     aria-label="线下模式"
                     title="线下模式"
                 >
@@ -1161,6 +1167,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     // Emoji panel
     const [showEmojiPanel, setShowEmojiPanel] = useState(false);
     const [showStickerPanel, setShowStickerPanel] = useState(false);
+    const [chatUiMode, setChatUiMode] = useState<"original" | "wechat">(session.chatUiMode === "wechat" ? "wechat" : "original");
+    useEffect(() => {
+        setChatUiMode(session.chatUiMode === "wechat" ? "wechat" : "original");
+    }, [session.chatUiMode]);
     const chatTextInputRef = useRef<ChatTextInputHandle | null>(null);
     const offlineTextInputRef = useRef<OfflineTextInputHandle | null>(null);
 
@@ -6397,6 +6407,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 onSendText={handleSendText}
                 onStopGeneration={clearStuckGeneration}
                 onTriggerAIResponse={triggerAIResponse}
+                uiMode={chatUiMode}
                 onSendSticker={(name, url) => { setShowStickerPanel(false); sendRichMessage("sticker", { label: name, stickerUrl: url }); }}
             />
             ))}

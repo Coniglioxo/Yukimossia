@@ -46,7 +46,7 @@ import { downloadFile } from "@/lib/download-utils";
 import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-scheme-storage";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
 import { KeyboardAutoSendDebounceItem } from "@/components/chat/keyboard-auto-send-debounce-item";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, LayoutPanelTop, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -478,6 +478,7 @@ export function ChatSettingsPanel({
     const [offlineSummaryRetry, setOfflineSummaryRetry] = useState(session.offlineSummaryRetry !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
     const [discardInvalidStickers, setDiscardInvalidStickers] = useState(session.discardInvalidStickers === true);
+    const [chatUiMode, setChatUiMode] = useState<"original" | "wechat">(session.chatUiMode === "wechat" ? "wechat" : "original");
     // 流式生成：按会话区分（线上/线下），存 ChatSession 字段，默认关
     const [streamOnline, setStreamOnline] = useState(session.streamOnline === true);
     const [streamOffline, setStreamOffline] = useState(session.streamOffline === true);
@@ -1300,6 +1301,32 @@ export function ChatSettingsPanel({
                             </div>
                         </button>
                     </>
+                </div>
+
+                {/* Chat composer UI */}
+                <div className="menu-group">
+                    <div className="menu-item">
+                        <ChatInfoIcon icon={LayoutPanelTop} color={CONTENT_APP_ACCENTS.chat} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">聊天输入栏 UI</span>
+                            <span className="menu-desc">原始底栏或微信式布局（仅当前会话）</span>
+                        </div>
+                        <div className="menu-right">
+                            <select
+                                className="ui-input h-8 text-xs"
+                                value={chatUiMode}
+                                onChange={e => {
+                                    const next = e.target.value === "wechat" ? "wechat" : "original";
+                                    setChatUiMode(next);
+                                    updateSession({ chatUiMode: next });
+                                }}
+                                aria-label="聊天输入栏 UI"
+                            >
+                                <option value="original">原始 UI</option>
+                                <option value="wechat">微信式 UI</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Backgrounds & UI */}

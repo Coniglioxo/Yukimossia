@@ -48,6 +48,8 @@ export type ChatSession = {
     voiceBackground?: string;
     isBlacklisted?: boolean;
     customCSS?: string;
+    /** 当前会话输入栏布局；未设置时保持原始 UI */
+    chatUiMode?: "original" | "wechat";
     isMuted?: boolean;
     bilingualTranslationEnabled?: boolean;
     collapseBilingualTranslation?: boolean;
