@@ -7259,11 +7259,21 @@
   display: grid !important;
   grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
   grid-template-areas: "plus field sticker send";
-  align-items: end;
+  align-items: center;
   column-gap: 8px;
 }
 .chat-input-bar-wechat .chat-input-field { grid-area: field; min-width: 0; }
 .chat-input-bar-wechat .chat-input-actions { display: contents; padding: 0; }
+.chat-input-bar-wechat .chat-input-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
+  order: 10;
+}
+.chat-input-bar-wechat .chat-input-panel > div {
+  width: 100%;
+}
 .chat-input-bar-wechat .chat-action-plus,
 .chat-input-bar-wechat .chat-action-sticker,
 .chat-input-bar-wechat .chat-action-send,
@@ -7273,6 +7283,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  min-height: 40px;
 }
 .chat-input-bar-wechat .chat-action-plus,
 .chat-input-bar-wechat .chat-offline-return { grid-area: plus; }

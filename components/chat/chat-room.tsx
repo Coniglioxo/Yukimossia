@@ -923,6 +923,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
             )}
 
             {showEmojiPanel && (
+                <div className="chat-input-panel chat-input-panel-emoji">
                 <EmojiPanel
                     onSelect={(emoji) => appendText(emoji, { focus: false })}
                     onEffectSend={(text) => {
@@ -931,20 +932,24 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                         onClosePanels();
                     }}
                 />
+                </div>
             )}
 
             {showStickerPanel && (
+                <div className="chat-input-panel chat-input-panel-sticker">
                 <StickerPanel
                     onSend={onSendSticker}
                     characterId={characterId}
                     characterIds={stickerCharacterIds}
                 />
+                </div>
             )}
         </div>
     );
 }));
 
 const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
+    uiMode: "original" | "wechat";
     isOfflineGenerating: boolean;
     isSpectator: boolean;
     showEmojiPanel: boolean;
@@ -955,6 +960,7 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
     onSendText: (text: string) => boolean;
     onStopGeneration: () => void;
 }>(function OfflineTextInputBar({
+    uiMode,
     isOfflineGenerating,
     isSpectator,
     showEmojiPanel,
@@ -6367,6 +6373,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     isSpectator={!!session.isGroup && !!session.isSpectator}
                     showEmojiPanel={showEmojiPanel}
                     enterToSendEnabled={enterToSendEnabled}
+                    uiMode={chatUiMode}
                     onToggleOfflineMode={toggleOfflineMode}
                     onCloseEmojiPanel={() => setShowEmojiPanel(false)}
                     onToggleEmojiPanel={() => { setShowEmojiPanel(!showEmojiPanel); setShowStickerPanel(false); setShowPlusMenu(false); }}
